@@ -36,7 +36,7 @@ public class TransactionManager implements AutoCloseable {
 
     @Override
     public void close() throws SQLException {
-        if(!committed) conn.rollback();
+        if(!committed && !isNested()) conn.rollback();
         conn.setAutoCommit(originalAutoCommit);
     }
 }
