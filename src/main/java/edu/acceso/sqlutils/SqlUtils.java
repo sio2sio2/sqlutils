@@ -172,7 +172,7 @@ public class SqlUtils {
                stmt.addBatch(sentencia);
            }
            stmt.executeBatch();
-           tm.commit();
+           if (!tm.isNested()) tm.commit();
        }
     }
 }
