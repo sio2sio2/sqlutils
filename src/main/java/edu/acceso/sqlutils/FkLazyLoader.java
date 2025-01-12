@@ -57,7 +57,7 @@ public class FkLazyLoader<T extends Entity> {
     }
 
     @SuppressWarnings("unchecked")
-    public T createProxy(Crud<T> sqlDao) {
+    public T createProxy(Crud<? extends Entity> sqlDao) {
         return (T) Proxy.newProxyInstance(
             object.getClass().getClassLoader(),
             object.getClass().getInterfaces(),
