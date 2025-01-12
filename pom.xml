@@ -7,7 +7,7 @@
     <groupId>edu.acceso.sqlutils</groupId>
     <artifactId>sqlutils</artifactId>
     <name>sqlutils</name>
-    <version>1.2.4</version>
+    <version>1.2.5</version>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -41,8 +41,7 @@
                         <configuration>
                             <compilerArgument>-proc:none</compilerArgument>
                             <includes>
-                                <include>fun/n/learn/annotation/LogMeCustomAnnotationProcessor.java</include>
-                                <!--include dependencies required for LogMeCustomAnnotationProcessor -->
+                                <include>edu/acceso/sqlutils/processor/FkAnnotationProcessor</include>
                             </includes>
                         </configuration>
                     </execution>
