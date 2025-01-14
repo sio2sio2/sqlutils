@@ -94,18 +94,22 @@ public class SqlUtils {
 
     /**
      * Genera un flujo con las filas generadas en un ResultSet.
+     * @param ac  La sentencia que generó rs o la conexión sobre la que se
+     * 	          ejecutó la sentencia. Proporciónese una u otra dependiendo de
+     * 	          qué es lo que quiere cerrar automáticamente al cerrarse el
+     * 	          Stream resultante.
      * @param rs Los resutados de una consulta.
      * @return Un flujo en el que cada elemento es el siguiente estado del ResultSet proporcionado.
      * @throws SQLException Cuando se produce un error al realizar la consulta.
      */
-    public static Stream<ResultSet> resultSetToStream(Statement stmt, ResultSet rs) {
+    public static Stream<ResultSet> resultSetToStream(AutoCloseable ac, ResultSet rs) {
         return StreamSupport.stream(Spliterators.spliteratorUnknownSize(new ResultSetIterator(rs), Spliterator.ORDERED), false)
             .onClose(() -> {
                 try {
                     rs.close();
-                    stmt.close();
+                    ac.close();
                 }
-                catch(SQLException err) {
+                catch(Exception err) {
                     throw new DataAccessException(err);
                 }
             });
@@ -114,13 +118,17 @@ public class SqlUtils {
     /**
      * Genera un flujo de objetos derivados del resultado de una consulta.
      * @param <T> La clase del objeto.
+     * @param ac  La sentencia que generó rs o la conexión sobre la que se
+     * 	          ejecutó la sentencia. Proporciónese una u otra dependiendo de
+     * 	          qué es lo que quiere cerrar automáticamente al cerrarse el
+     * 	          Stream resultante.
      * @param rs  El objeto que representa los resultado de la consulta.
      * @param mapper La función que permite transformar la fila en un objeto (puede generar un SQLException).
      * @return El flujo de objetos.
      * @throws SQLException Cuando Cuando se produce un error al realizar la consulta.
      */
-    public static <T> Stream<T> resultSetToStream(Statement stmt, ResultSet rs, CheckedFunction<ResultSet, T> mapper) {
-        return resultSetToStream(stmt, rs).map(checkedToUnchecked(mapper));
+    public static <T> Stream<T> resultSetToStream(AutoCloseable ac, ResultSet rs, CheckedFunction<ResultSet, T> mapper) {
+        return resultSetToStream(ac, rs).map(checkedToUnchecked(mapper));
     }
 
     /**
