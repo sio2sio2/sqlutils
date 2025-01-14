@@ -4,15 +4,16 @@ import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import edu.acceso.sqlutils.annotations.Fk;
-import net.sf.cglib.proxy.Enhancer;
-import net.sf.cglib.proxy.MethodInterceptor;
+import javassist.util.proxy.MethodHandler;
+import javassist.util.proxy.Proxy;
+import javassist.util.proxy.ProxyFactory;
 
 public class FkLazyLoader<T extends Entity> {
 
@@ -58,13 +59,14 @@ public class FkLazyLoader<T extends Entity> {
 
     @SuppressWarnings("unchecked")
     public T createProxy(Crud<? extends Entity> sqlDao) {
-        assert !Modifier.isFinal(object.getClass().getModifiers()): "No se puede crear un proxy para clases finales: " + object.getClass().getName();
+        ProxyFactory factory = new ProxyFactory();
+        factory.setSuperclass(object.getClass());
 
-        return (T) Enhancer.create(object.getClass(), (MethodInterceptor) (obj, method, args, proxy) -> {
+        MethodHandler handler = (self, method, proceed, args) -> {
             PropertyDescriptor pd = descriptors.get(method.getName());
-            Object value = proxy.invokeSuper(obj, args);
-
-            if(pd != null) {
+            Object value = proceed.invoke(self, args);
+            
+            if(pd != null) {  // El método es un getter.
                 Integer fk = fks.get(pd.getName());  // fk también es nulo si el campo no es una clave foránea.
                 // Si la clave foránea no es nula, pero el atributo al que hace referencia es nulo
                 // es necesario realizar la consulta a la base de datos y establecer el valor.
@@ -72,10 +74,19 @@ public class FkLazyLoader<T extends Entity> {
                     String ent = object.getClass().getSimpleName();
                     String ref = method.getReturnType().getSimpleName();
                     value = sqlDao.get(fk).orElseThrow(() -> new DataAccessException(String.format("Violación de integridad referencial: %s('%d') referido en %s no existe", ref, fk, ent)));
-                    pd.getWriteMethod().invoke(object, value);
+                    pd.getWriteMethod().invoke(self, value);
                 }
             }
             return value;
-        });
+        };
+
+        try {
+            Object proxy = factory.createClass().getDeclaredConstructor().newInstance();
+            ((Proxy) proxy).setHandler(handler);
+            return (T) proxy;
+        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException
+                | NoSuchMethodException | SecurityException e) {
+            throw new IllegalStateException(String.format("'%s' requiere un constructor sin parámetros", object.getClass().getSimpleName()), e);
+        }
     }
 }
