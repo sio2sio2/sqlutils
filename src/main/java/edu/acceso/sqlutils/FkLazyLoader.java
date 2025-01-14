@@ -4,15 +4,15 @@ import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import edu.acceso.sqlutils.annotations.Fk;
+import net.sf.cglib.proxy.Enhancer;
+import net.sf.cglib.proxy.MethodInterceptor;
 
 public class FkLazyLoader<T extends Entity> {
 
@@ -58,29 +58,24 @@ public class FkLazyLoader<T extends Entity> {
 
     @SuppressWarnings("unchecked")
     public T createProxy(Crud<? extends Entity> sqlDao) {
-        return (T) Proxy.newProxyInstance(
-            object.getClass().getClassLoader(),
-            object.getClass().getInterfaces(),
-            new InvocationHandler() {
-                @Override
-                public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                    PropertyDescriptor pd = descriptors.get(method.getName());
-                    Object value = method.invoke(object, args);
+        assert !Modifier.isFinal(object.getClass().getModifiers()): "No se puede crear un proxy para clases finales: " + object.getClass().getName();
 
-                    if(pd != null) {
-                        Integer fk = fks.get(pd.getName());  // fk también es nulo si el campo no es una clave foránea.
-                        // Si la clave foránea no es nula, pero el atributo al que hace referencia es nulo
-                        // es necesario realizar la consulta a la base de datos y establecer el valor.
-                        if(fk != null && value == null) {
-                            String ent = object.getClass().getSimpleName();
-                            String ref = method.getReturnType().getSimpleName();
-                            value = sqlDao.get(fk).orElseThrow(() -> new DataAccessException(String.format("Violación de integridad referencial: %s('%d') referido en %s no existe", ref, fk, ent)));
-                            pd.getWriteMethod().invoke(object, value);
-                        }
-                    }
-                    return value;
+        return (T) Enhancer.create(object.getClass(), (MethodInterceptor) (obj, method, args, proxy) -> {
+            PropertyDescriptor pd = descriptors.get(method.getName());
+            Object value = proxy.invokeSuper(obj, args);
+
+            if(pd != null) {
+                Integer fk = fks.get(pd.getName());  // fk también es nulo si el campo no es una clave foránea.
+                // Si la clave foránea no es nula, pero el atributo al que hace referencia es nulo
+                // es necesario realizar la consulta a la base de datos y establecer el valor.
+                if(fk != null && value == null) {
+                    String ent = object.getClass().getSimpleName();
+                    String ref = method.getReturnType().getSimpleName();
+                    value = sqlDao.get(fk).orElseThrow(() -> new DataAccessException(String.format("Violación de integridad referencial: %s('%d') referido en %s no existe", ref, fk, ent)));
+                    pd.getWriteMethod().invoke(object, value);
                 }
             }
-        );
+            return value;
+        });
     }
 }
