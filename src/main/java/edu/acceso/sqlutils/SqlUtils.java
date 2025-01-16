@@ -44,12 +44,12 @@ public class SqlUtils {
             if(avanzar) {
                 try {
                     if(rs.isClosed()) {
-                        throw new DataAccessException("ResultSet is closed!!!");
+                        throw new DataAccessRuntimeException("ResultSet is closed!!!");
                     }
                     hasNextElement = rs.next();
                 }
                 catch(SQLException err) {
-                    throw new DataAccessException(err);
+                    throw new DataAccessRuntimeException(err);
                 }
                 finally {
                     avanzar = false;
@@ -87,7 +87,7 @@ public class SqlUtils {
                 return checked.apply(t);
             }
             catch(SQLException err) {
-                throw new DataAccessException(err);
+                throw new DataAccessRuntimeException(err);
             }
         };
     }
@@ -110,7 +110,7 @@ public class SqlUtils {
                     ac.close();
                 }
                 catch(Exception err) {
-                    throw new DataAccessException(err);
+                    throw new DataAccessRuntimeException(err);
                 }
             });
     }
