@@ -87,7 +87,7 @@ public class FkLazyLoader<T extends Entity> {
                 // Si la clave foránea no es nula, pero el atributo al que hace referencia es nulo
                 // es necesario realizar la consulta a la base de datos y establecer el valor.
                 if(ofk != null && value == null) {
-                    Integer fk =  (Integer) ofk.get("fk"); 
+                    Integer fk =  (Integer) ofk.get("id"); 
                     Crud<? extends Entity> sqlDao = (Crud<? extends Entity>) ofk.get("dao");
                     String ent = object.getClass().getSimpleName();
                     String ref = method.getReturnType().getSimpleName();
