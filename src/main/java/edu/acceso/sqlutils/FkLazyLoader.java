@@ -28,7 +28,7 @@ public class FkLazyLoader<T extends Entity> {
         fks = new HashMap<>();
         descriptors = getPropertyDescriptors();
 
-        // Definimos un mapa con todos las claves foráneas permitidas.
+        // Definimos un mapa con todos las claves foráneas declaradas.
         for(Field field: object.getClass().getDeclaredFields()) {
             if(!field.isAnnotationPresent(Fk.class)) continue;
             fks.put(field.getName(), null);
@@ -63,7 +63,14 @@ public class FkLazyLoader<T extends Entity> {
     }
 
     public FkLazyLoader<T> setFk(String name, Integer fk, Crud<? extends Entity> sqlDao) {
-        if(!fks.containsKey(name)) throw new IllegalStateException(String.format("%s: Clave foránea inválida", name));
+        if(!descriptors.containsKey(name)) {
+            throw new IllegalStateException(String.format("%s: no es un atributo o no tiene definido un getter", name));
+        }
+
+        if(!fks.containsKey(name)) {
+            // Podríamos advertir con un logger de que el atributo no esta anotado como clave foránea.
+        }
+
         // Almacenamos para cada clave foránea el identificador y un objeto apropiado para hacer la consulta.
         Map<String, Object> value = Map.of(
             "id", fk,
