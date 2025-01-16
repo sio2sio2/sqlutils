@@ -20,7 +20,7 @@ public class FkLazyLoader<T extends Entity> {
     private static final Map<Class<?>, Map<String, PropertyDescriptor>> cache = new HashMap<>();
 
     private final Map<String, PropertyDescriptor> descriptors;
-    private final Map<String, Integer> fks;
+    private final Map<String, Map<String, Object>> fks;
     private T object;
 
     public FkLazyLoader(T object) {
@@ -42,7 +42,7 @@ public class FkLazyLoader<T extends Entity> {
         if(!cache.containsKey(clazz)) {
             try {
                 PropertyDescriptor[] descriptors = Introspector.getBeanInfo(clazz).getPropertyDescriptors();
-                cache.put(clazz, Arrays.stream(descriptors).filter(d -> d.getReadMethod() != null).collect(Collectors.toMap(d -> d.getReadMethod().getName(), d -> d)));
+                cache.put(clazz, Arrays.stream(descriptors).filter(d -> d.getReadMethod() != null).collect(Collectors.toMap(d -> d.getName(), d -> d)));
             }
             catch(IntrospectionException err) {
                 throw new RuntimeException(err);
@@ -51,32 +51,51 @@ public class FkLazyLoader<T extends Entity> {
         return cache.get(clazz);
     }
 
-    public FkLazyLoader<T> setFk(String name, Integer value) {
+    /**
+     * Obtiene un descriptor a partir del nombre de su getter.
+     * @param getter El nombre del getter.
+     * @return El descriptor asociado al getter.
+     */
+    private PropertyDescriptor getPropertyDescriptor(String getter) {
+        return descriptors.values().stream()
+            .filter(d -> d.getReadMethod().getName() == getter).findFirst()
+            .orElse(null);
+    }
+
+    public FkLazyLoader<T> setFk(String name, Integer fk, Crud<? extends Entity> sqlDao) {
         if(!fks.containsKey(name)) throw new IllegalStateException(String.format("%s: Clave foránea inválida", name));
+        // Almacenamos para cada clave foránea el identificador y un objeto apropiado para hacer la consulta.
+        Map<String, Object> value = Map.of(
+            "id", fk,
+            "dao", sqlDao
+        );
         fks.put(name, value);
         return this;
     }
 
     @SuppressWarnings("unchecked")
-    public T createProxy(Crud<? extends Entity> sqlDao) {
+    public T createProxy() {
         ProxyFactory factory = new ProxyFactory();
         factory.setSuperclass(object.getClass());
 
         MethodHandler handler = (self, method, proceed, args) -> {
-            PropertyDescriptor pd = descriptors.get(method.getName());
             Object value = proceed.invoke(self, args);
-            
+
+            PropertyDescriptor pd = getPropertyDescriptor(method.getName());
             if(pd != null) {  // El método es un getter.
-                Integer fk = fks.get(pd.getName());  // fk también es nulo si el campo no es una clave foránea.
+                Map<String, Object> ofk = fks.get(pd.getName()); // También es nulo si el atributo no es una clave foránea.
                 // Si la clave foránea no es nula, pero el atributo al que hace referencia es nulo
                 // es necesario realizar la consulta a la base de datos y establecer el valor.
-                if(fk != null && value == null) {
+                if(ofk != null && value == null) {
+                    Integer fk =  (Integer) ofk.get("fk"); 
+                    Crud<? extends Entity> sqlDao = (Crud<? extends Entity>) ofk.get("dao");
                     String ent = object.getClass().getSimpleName();
                     String ref = method.getReturnType().getSimpleName();
                     value = sqlDao.get(fk).orElseThrow(() -> new DataAccessException(String.format("Violación de integridad referencial: %s('%d') referido en %s no existe", ref, fk, ent)));
                     pd.getWriteMethod().invoke(self, value);
                 }
             }
+
             return value;
         };
 
