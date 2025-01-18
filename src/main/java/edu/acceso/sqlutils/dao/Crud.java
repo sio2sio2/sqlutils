@@ -1,7 +1,10 @@
-package edu.acceso.sqlutils;
+package edu.acceso.sqlutils.dao;
 
 import java.util.Optional;
 import java.util.stream.Stream;
+
+import edu.acceso.sqlutils.Entity;
+import edu.acceso.sqlutils.errors.DataAccessException;
 
 public interface Crud<T extends Entity> {
 

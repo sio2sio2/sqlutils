@@ -3,6 +3,8 @@ package edu.acceso.sqlutils;
 import java.sql.Connection;
 import java.sql.SQLException;
 
+import edu.acceso.sqlutils.errors.DataAccessException;
+
 public class Transaction {
 
     public static class Manager implements AutoCloseable {

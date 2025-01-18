@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import edu.acceso.sqlutils.annotations.Fk;
+import edu.acceso.sqlutils.dao.Crud;
+import edu.acceso.sqlutils.errors.DataAccessException;
 import javassist.util.proxy.MethodHandler;
 import javassist.util.proxy.Proxy;
 import javassist.util.proxy.ProxyFactory;

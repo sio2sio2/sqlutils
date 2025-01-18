@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils;
+package edu.acceso.sqlutils.errors;
 
 public class DataAccessRuntimeException extends RuntimeException {
     public DataAccessRuntimeException(String message, Throwable cause) {

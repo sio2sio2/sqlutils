@@ -20,6 +20,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import edu.acceso.sqlutils.errors.DataAccessRuntimeException;
+
 /**
  * Clase que implementa algunos métodos estáticos adicionales a JDBC.
  */
