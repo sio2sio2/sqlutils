@@ -172,7 +172,7 @@ public class SqlUtils {
 
     public static void executeSQL(Connection conn, InputStream st) throws SQLException, IOException {
        try (
-           TransactionManager tm = new TransactionManager(conn);
+           Transaction.Manager tm = new Transaction.Manager(conn);
            Statement stmt = conn.createStatement();
        ) {
            List<String> sentencias = splitSQL(st);
