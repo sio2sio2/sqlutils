@@ -12,23 +12,14 @@ import javax.sql.DataSource;
  */
 public abstract class AbstractDao {
 
-    private final DataSource ds;
-    private final Connection conn;
+    protected final ConnectionProvider cp;
 
 
     protected AbstractDao(DataSource ds) {
-        this.ds = ds;
-        this.conn = null;
+        cp = ConnectionProvider.fromDataSource(ds);
     }
 
     protected AbstractDao(Connection conn) {
-        this.ds = null;
-        // Gracias a esto conn no se cerrará aunque se intente
-        // cerrar (con un try-with-resources) en la implementación.
-        this.conn = ConnectionProxy.createProxy(conn, false);
-    }
-
-    protected Connection getConnection() throws SQLException {
-        return ds == null?conn:ds.getConnection();
+        cp = ConnectionProvider.fromConnection(conn);
     }
 }

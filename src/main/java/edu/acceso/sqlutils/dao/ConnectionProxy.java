@@ -25,7 +25,7 @@ class ConnectionProxy implements InvocationHandler {
         return method.invoke(realConnection, args);
     }
 
-    public static Connection createProxy(Connection connection, boolean closeable) {
+    public static Connection wrap(Connection connection, boolean closeable) {
         return (Connection) Proxy.newProxyInstance(
             connection.getClass().getClassLoader(),
             new Class<?>[]{Connection.class},
