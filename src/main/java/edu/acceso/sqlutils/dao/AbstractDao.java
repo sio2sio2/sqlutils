@@ -1,7 +1,6 @@
 package edu.acceso.sqlutils.dao;
 
 import java.sql.Connection;
-import java.sql.SQLException;
 
 import javax.sql.DataSource;
 
@@ -14,6 +13,9 @@ public abstract class AbstractDao {
 
     protected final ConnectionProvider cp;
 
+    protected AbstractDao(ConnectionProvider cp) {
+        this.cp = cp;
+    }
 
     protected AbstractDao(DataSource ds) {
         cp = ConnectionProvider.fromDataSource(ds);
