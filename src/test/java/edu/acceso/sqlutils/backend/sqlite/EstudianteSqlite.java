@@ -64,9 +64,9 @@ public class EstudianteSqlite extends AbstractDao implements Crud<Estudiante> {
     private static Estudiante resultToEstudiante(ResultSet rs, ConnectionProvider cp) throws SQLException {
         int id = rs.getInt("id_estudiante");
         String nombre = rs.getString("nombre");
+        LocalDate nacimiento = rs.getDate("nacimiento").toLocalDate();
         Integer idCentro = rs.getInt("centro");
         if(rs.wasNull()) idCentro = null;
-        LocalDate nacimiento = rs.getDate("nacimiento").toLocalDate();
 
         Estudiante estudiante = new Estudiante();
         Centro centro = null;
@@ -75,9 +75,9 @@ public class EstudianteSqlite extends AbstractDao implements Crud<Estudiante> {
         //if(IdCentro != null) centro = new CentroSqlite(ds).get(IdCentro).orElse(null);
 
         // Carga perezosa: proxy al que se le carga la clave foránea
-        FkLazyLoader<Estudiante> loader = new FkLazyLoader<>(estudiante);
-        loader.setFk("centro", idCentro, new CentroSqlite(cp));
-        estudiante = loader.createProxy();
+        estudiante = new FkLazyLoader<>(estudiante)
+                        .setFk("centro", idCentro, new CentroSqlite(cp))
+                        .createProxy();
 
         // Cargamos datos en el objeto y entregamos.
         return estudiante.cargarDatos(id, nombre, nacimiento, centro);
@@ -107,7 +107,7 @@ public class EstudianteSqlite extends AbstractDao implements Crud<Estudiante> {
             Statement stmt = conn.createStatement();
             ResultSet rs = stmt.executeQuery(sqlString);
 
-            return SqlUtils.resultSetToStream(conn, rs, fila -> resultToEstudiante(fila, cp));
+            return SqlUtils.resultSetToStream(cp.isCloseable()?conn:stmt, rs, fila -> resultToEstudiante(fila, cp));
         }
         catch(SQLException err) {
             throw new DataAccessException(err);

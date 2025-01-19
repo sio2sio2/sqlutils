@@ -173,6 +173,13 @@ public class SqlUtils {
         }
     }
 
+    /**
+     * Ejecuta las sentencias incluidas en un guión SQL dentro de una transacción.
+     * @param conn La conexión para ejecutar las sentencias.
+     * @param st El flujo de entrada con el contenido del guión.
+     * @throws SQLException Cuando alguna sentencia es inválida y no puede ejecutarse.
+     * @throws IOException Cuando no puede accederse al flujo de entrada.
+     */
     public static void executeSQL(Connection conn, InputStream st) throws SQLException, IOException {
        try (
            TransactionManager tm = new TransactionManager(conn);

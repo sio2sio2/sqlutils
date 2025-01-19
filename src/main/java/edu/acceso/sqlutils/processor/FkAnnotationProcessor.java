@@ -14,6 +14,10 @@ import javax.tools.Diagnostic;
 
 import edu.acceso.sqlutils.annotations.Fk;
 
+/**
+ * Verifica durante la compilación que todos los campos definidos
+ * como clave foránea tienen su getter correspondiente.
+ */
 @SupportedAnnotationTypes("edu.acceso.sqlutils.annotations.Fk")
 @SupportedSourceVersion(SourceVersion.RELEASE_17)
 public class FkAnnotationProcessor extends AbstractProcessor {
