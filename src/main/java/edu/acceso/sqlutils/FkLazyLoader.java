@@ -92,7 +92,7 @@ public class FkLazyLoader<T extends Entity> {
 
             PropertyDescriptor pd = getPropertyDescriptor(method.getName());
             if(pd != null) {  // El método es un getter.
-                Map<String, Object> ofk = fks.get(pd.getName()); // También es nulo si el atributo no es una clave foránea.
+                Map<String, Object> ofk = fks.get(pd.getName());
                 // Si la clave foránea no es nula, pero el atributo al que hace referencia es nulo
                 // es necesario realizar la consulta a la base de datos y establecer el valor.
                 if(ofk != null && value == null) {
