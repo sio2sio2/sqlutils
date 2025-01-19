@@ -21,6 +21,7 @@ import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import edu.acceso.sqlutils.errors.DataAccessRuntimeException;
+import edu.acceso.sqlutils.transaction.TransactionManager;
 
 /**
  * Clase que implementa algunos métodos estáticos adicionales a JDBC.
@@ -174,7 +175,7 @@ public class SqlUtils {
 
     public static void executeSQL(Connection conn, InputStream st) throws SQLException, IOException {
        try (
-           Transaction.Manager tm = new Transaction.Manager(conn);
+           TransactionManager tm = new TransactionManager(conn);
            Statement stmt = conn.createStatement();
        ) {
            List<String> sentencias = splitSQL(st);
