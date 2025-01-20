@@ -74,8 +74,11 @@ public class ConexionSqlite implements Conexion {
         // Si no podemos obtener la lista de los centros disponibles.
         // es porque aún no existe la base de datos.
         catch(DataAccessException err) {
-            try (InputStream st = Files.newInputStream(esquema)) {
-                SqlUtils.executeSQL(ds.getConnection(), st);
+            try (
+                Connection conn = ds.getConnection();
+                InputStream st = Files.newInputStream(esquema);
+            ) {
+                SqlUtils.executeSQL(conn, st);
             }
             catch(SQLException e) {
                 throw new DataAccessException("No puede crearse el esquema de la base de datos", e);
