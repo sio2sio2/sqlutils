@@ -16,17 +16,16 @@ import com.zaxxer.hikari.HikariDataSource;
 
 import edu.acceso.sqlutils.SqlUtils;
 import edu.acceso.sqlutils.backend.AbstractDsCache;
-import edu.acceso.sqlutils.backend.Conexion;
-import edu.acceso.sqlutils.dao.Crud;
+import edu.acceso.sqlutils.dao.Dao;
+import edu.acceso.sqlutils.dao.DaoConnection;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.modelo.Centro;
-import edu.acceso.sqlutils.modelo.Estudiante;
 import edu.acceso.sqlutils.transaction.TransactionManager;
 
 /**
  * Modela la conexión a una base de dato SQLite
  */
-public class ConexionSqlite extends AbstractDsCache implements Conexion {
+public class ConexionSqlite extends AbstractDsCache implements DaoConnection {
     final static Path esquema = Path.of(System.getProperty("user.dir"), "src", "test", "resources", "esquema.sql");
     final static String protocol = "jdbc:sqlite:";
     final static short maxConn = 10;
@@ -68,18 +67,13 @@ public class ConexionSqlite extends AbstractDsCache implements Conexion {
         return (String) opciones.get("url");
     }
 
-    @Override
-    public Crud<Centro> getCentroDao() {
-        return new CentroSqlite(ds);
-    }
-
-    @Override
-    public Crud<Estudiante> getEstudianteDao() {
-        return new EstudianteSqlite(ds);
+    @SuppressWarnings("unchecked")
+    public Dao getDao() {
+        return new Dao(ds, CentroSqlite.class, EstudianteSqlite.class);
     }
 
     private void initDB() throws DataAccessException {
-        try (Stream<Centro> centros = getCentroDao().get()) {
+        try (Stream<Centro> centros = getDao().get(Centro.class)) {
             centros.close();
         }
         // Si no podemos obtener la lista de los centros disponibles.
@@ -101,10 +95,11 @@ public class ConexionSqlite extends AbstractDsCache implements Conexion {
     }
 
     @Override
-    public void transaccion(Transaccionable operaciones) throws DataAccessException {
+    @SuppressWarnings("unchecked")
+    public void transaction(DaoTransactionable operaciones) throws DataAccessException {
         try(Connection conn = ds.getConnection()) {
             TransactionManager.transactionSQL(conn, c -> {
-                operaciones.run(new CentroSqlite(c), new EstudianteSqlite(c));
+                operaciones.run(new Dao(c, CentroSqlite.class, EstudianteSqlite.class));
             });
         }
         catch(SQLException err) {

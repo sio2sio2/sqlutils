@@ -107,6 +107,7 @@ public class TransactionManager implements AutoCloseable {
         try {
             if(conn == null) throw new IllegalArgumentException("La conexión no puede ser nula");
             if(!conn.isValid(0)) throw new SQLException("La conexión debe ser válida");
+            originalAutoCommit = conn.getAutoCommit();
             conn.setAutoCommit(false);
             
             operations.run(conn);
@@ -123,7 +124,7 @@ public class TransactionManager implements AutoCloseable {
         }
         finally {
             try {
-                if(!originalAutoCommit && !rollback) conn.commit();
+                if(originalAutoCommit && !rollback) conn.commit();
             }
             catch(SQLException err) {
                 throw new DataAccessException(err);

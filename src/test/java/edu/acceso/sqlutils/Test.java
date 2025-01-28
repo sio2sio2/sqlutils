@@ -3,13 +3,12 @@ package edu.acceso.sqlutils;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.Stream;
 
 import edu.acceso.sqlutils.backend.BackendFactory;
-import edu.acceso.sqlutils.backend.Conexion;
-import edu.acceso.sqlutils.dao.Crud;
+import edu.acceso.sqlutils.dao.Dao;
+import edu.acceso.sqlutils.dao.DaoConnection;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.modelo.Centro;
 import edu.acceso.sqlutils.modelo.Estudiante;
@@ -32,14 +31,13 @@ public class Test {
 
         // Establecemos una conexión con el backend y obtenemos
         // los objetos que nos sirven para recuperar y guardar objetos.
-        Conexion conexion = BackendFactory.crearConexion(opciones);
-        Crud<Centro> centroDao = conexion.getCentroDao();
-        Crud<Estudiante> estudianteDao = conexion.getEstudianteDao();
+        DaoConnection conexion = BackendFactory.crearConexion(opciones);
+        Dao dao = conexion.getDao();
 
         // Obtiene un centro existente.
         Centro castillo = null;
         try {
-            castillo = centroDao.get(11004866).orElse(null);
+            castillo = dao.get(Centro.class, 11004866).orElse(null);
             System.out.println(castillo);
         }
         catch(DataAccessException err) {
@@ -55,9 +53,9 @@ public class Test {
                 new Estudiante(2, "María de la O", LocalDate.parse("23/04/1990", formato), castillo)
             };
 
-            estudianteDao.insert(Arrays.asList(estudiantes));
+            dao.insert(estudiantes);
 
-            perico = estudianteDao.get(1).orElse(null);
+            perico = dao.get(Estudiante.class, 1).orElse(null);
             System.out.println("-- \nDatos de perico:");
             System.out.println(perico);
             System.out.println(perico.getCentro());
@@ -70,9 +68,9 @@ public class Test {
         // Actualización de un estudiante
         try {
             perico.setNombre("Perico de los Palotes");
-            if(estudianteDao.update(perico)) {
+            if(dao.update(perico)) {
                 // Lo recuperamos de la base de datos.
-                perico = estudianteDao.get(1).orElse(null);
+                perico = dao.get(Estudiante.class, 1).orElse(null);
                 System.out.printf("-- \nHemos actualizado Perico: %s\n", perico);
             }
         }
@@ -83,15 +81,15 @@ public class Test {
 
         // Intentamos actualizar ambos estudiantes en una transacción.
         try {
-            conexion.transaccion((cDao, eDao) -> {
-                Estudiante e1 = eDao.get(1).orElse(null);
-                Estudiante e2 = eDao.get(3).orElse(null); // No existe.
+            conexion.transaction(xDao -> {
+                Estudiante e1 = xDao.get(Estudiante.class, 1).orElse(null);
+                Estudiante e2 = xDao.get(Estudiante.class, 3).orElse(null); // No existe.
 
                 e1.setNombre("Estudiante 1");
-                eDao.update(e1);
+                xDao.update(e1);
 
                 e2.setNombre("Estudiante 2"); // Falla: RuntimeException
-                eDao.update(e2);
+                xDao.update(e2);
             });
         }
         catch(Exception err) {
@@ -99,7 +97,7 @@ public class Test {
         }
 
         System.out.println("-- \nLista de estudiantes:");
-        try(Stream<Estudiante> estudiantes = estudianteDao.get()) {
+        try(Stream<Estudiante> estudiantes = dao.get(Estudiante.class)) {
             estudiantes.forEach(System.out::println);
         }
         catch(DataAccessException err) {

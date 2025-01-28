@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.Map;
 
 import edu.acceso.sqlutils.backend.sqlite.ConexionSqlite;
+import edu.acceso.sqlutils.dao.DaoConnection;
 
 public class BackendFactory {
 
@@ -13,17 +14,17 @@ public class BackendFactory {
         MYSQL(null),
         XML(null);
 
-        private Class<? extends Conexion> backend;
+        private Class<? extends DaoConnection> backend;
 
-        Backend(Class<? extends Conexion> backend) {
+        Backend(Class<? extends DaoConnection> backend) {
             setBackend(backend);
         }
 
-        private void setBackend(Class<? extends Conexion> backend) {
+        private void setBackend(Class<? extends DaoConnection> backend) {
             this.backend = backend;
         }
 
-        public Class<? extends Conexion> get() {
+        public Class<? extends DaoConnection> get() {
             return backend;
         }
 
@@ -38,7 +39,7 @@ public class BackendFactory {
         }
     };
 
-    public static Conexion crearConexion(Map<String, Object> opciones) {
+    public static DaoConnection crearConexion(Map<String, Object> opciones) {
         Backend backend = Backend.getBackend((String) opciones.get("base"));
         if(backend == null) throw new IllegalArgumentException(String.format("'%s': formato desconocido", opciones.get("base")));
         if(backend.noImplementado()) throw new UnsupportedOperationException(String.format("'%s': formato no soportado", opciones.get("base")));
