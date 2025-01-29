@@ -14,13 +14,14 @@ import javax.sql.DataSource;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
+import edu.acceso.sqlutils.Entity;
 import edu.acceso.sqlutils.SqlUtils;
 import edu.acceso.sqlutils.backend.AbstractDsCache;
+import edu.acceso.sqlutils.dao.Crud;
 import edu.acceso.sqlutils.dao.Dao;
 import edu.acceso.sqlutils.dao.DaoConnection;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.modelo.Centro;
-import edu.acceso.sqlutils.transaction.TransactionManager;
 
 /**
  * Modela la conexión a una base de dato SQLite
@@ -67,9 +68,28 @@ public class ConexionSqlite extends AbstractDsCache implements DaoConnection {
         return (String) opciones.get("url");
     }
 
+    @Override
     @SuppressWarnings("unchecked")
+    public Class<? extends Crud<? extends Entity>>[] getDaoClasses() {
+        return (Class<? extends Crud<? extends Entity>>[]) new Class<?>[] {
+            CentroSqlite.class,
+            EstudianteSqlite.class
+        };
+    }
+
+    @Override
+    public Connection getConnection() throws DataAccessException {
+        try {
+            return ds.getConnection();
+        }
+        catch(SQLException err) {
+            throw new DataAccessException(err);
+        }
+    }
+
+    @Override
     public Dao getDao() {
-        return new Dao(ds, CentroSqlite.class, EstudianteSqlite.class);
+        return new Dao(ds, getDaoClasses());
     }
 
     private void initDB() throws DataAccessException {
@@ -80,7 +100,7 @@ public class ConexionSqlite extends AbstractDsCache implements DaoConnection {
         // es porque aún no existe la base de datos.
         catch(DataAccessException err) {
             try (
-                Connection conn = ds.getConnection();
+                Connection conn = getConnection();
                 InputStream st = Files.newInputStream(esquema);
             ) {
                 SqlUtils.executeSQL(conn, st);
@@ -91,19 +111,6 @@ public class ConexionSqlite extends AbstractDsCache implements DaoConnection {
             catch(IOException e) {
                 throw new DataAccessException(String.format("No puede acceder al esquema: %s", esquema));
             }
-        }
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public void transaction(DaoTransactionable operaciones) throws DataAccessException {
-        try(Connection conn = ds.getConnection()) {
-            TransactionManager.transactionSQL(conn, c -> {
-                operaciones.run(new Dao(c, CentroSqlite.class, EstudianteSqlite.class));
-            });
-        }
-        catch(SQLException err) {
-            throw new DataAccessException(err);
         }
     }
 }
