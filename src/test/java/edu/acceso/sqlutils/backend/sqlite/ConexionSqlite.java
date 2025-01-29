@@ -16,7 +16,6 @@ import com.zaxxer.hikari.HikariDataSource;
 
 import edu.acceso.sqlutils.Entity;
 import edu.acceso.sqlutils.SqlUtils;
-import edu.acceso.sqlutils.backend.AbstractDsCache;
 import edu.acceso.sqlutils.dao.Crud;
 import edu.acceso.sqlutils.dao.Dao;
 import edu.acceso.sqlutils.dao.DaoConnection;
@@ -26,7 +25,7 @@ import edu.acceso.sqlutils.modelo.Centro;
 /**
  * Modela la conexión a una base de dato SQLite
  */
-public class ConexionSqlite extends AbstractDsCache implements DaoConnection {
+public class ConexionSqlite extends DaoConnection {
     final static Path esquema = Path.of(System.getProperty("user.dir"), "src", "test", "resources", "esquema.sql");
     final static String protocol = "jdbc:sqlite:";
     final static short maxConn = 10;
