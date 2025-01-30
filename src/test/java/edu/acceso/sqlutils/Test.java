@@ -22,25 +22,25 @@ public class Test {
 
     public static void main(String[] args) {
         // Estos datos debería obtenerse de alguna manera.
-        Path path = Path.of(System.getProperty("java.io.tmpdir"), "caca.db");
-
         Map<String, Object> opciones = Map.of(
             "base", "sqlite",
-//            "url",  path.toString(),
+//            "url", Path.of(System.getProperty("java.io.tmpdir"), "caca.db").toString(),
             "url", "file::memory:?cache=shared",  // Para que se comparta la base de datos entre todas las conexiones del pool
             "user", "",
-            "password", ""
+            "password", "",
+            "esquema", Path.of(System.getProperty("user.dir"), "src", "test", "resources", "esquema.sql")
         );
 
         // Esta es el tipo de base de datos que usaremos para persistencia (sqlite)
         String base = (String) opciones.get("base");
+        Path esquema = (Path) opciones.get("esquema");
 
         DaoConnection conexion = new BackendFactory()
             // Registramos todos los tipos de bases de datos soportados
             .register("SQLITE", ConexionSqlite.class)
             .register("MARIADB", null) // No hay soporte, pero se espera que lo haya en el futuro.  
             // Escogemos el conector adecuado e indicamos las clases DAO.
-            .createConnection(base, opciones, CentroSqlite.class, EstudianteSqlite.class);
+            .createConnection(base, opciones, esquema, CentroSqlite.class, EstudianteSqlite.class);
 
         // Obtenemos el objeto Dao que nos sirve para la persistencia de centros y estudiantes
         Dao dao = conexion.getDao();

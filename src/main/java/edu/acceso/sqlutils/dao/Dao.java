@@ -20,7 +20,7 @@ public class Dao {
     private final Map<Class<? extends Entity>, Crud<? extends Entity>> daos = new HashMap<>();
 
     @SuppressWarnings("unchecked")
-    private static Class<? extends Entity> getEntityType(Class<? extends Crud<? extends Entity>> daoClass) {
+    static Class<? extends Entity> getEntityType(Class<? extends Crud<? extends Entity>> daoClass) {
         for(Type genericInterface: daoClass.getGenericInterfaces()) {
             if (genericInterface instanceof ParameterizedType) {
                 if (((ParameterizedType) genericInterface).getRawType().equals(Crud.class)) {
@@ -84,7 +84,7 @@ public class Dao {
     }
 
     @SuppressWarnings("unchecked")
-    public <T extends Entity> Crud<T> getClassDao(Class<T> clazz) {
+    public <T extends Entity> Crud<T> getDaoClass(Class<T> clazz) {
         Crud<?> dao = daos.get(clazz);
         if(dao == null) {  // Quizás clazz es una subclase y también vale.
             for(Class<? extends Entity> entityClass: daos.keySet()) {
@@ -98,21 +98,21 @@ public class Dao {
     }
 
     public <T extends Entity> Optional<T> get(Class<T> clazz, int id) throws DataAccessException {
-        Crud<T> dao = getClassDao(clazz);
+        Crud<T> dao = getDaoClass(clazz);
         if(dao == null) throw new DataAccessRuntimeException(String.format("La clase '%s' no se registro como clase DAO", clazz.getName()));
 
         return (Optional<T>) dao.get(id);
     }
 
     public <T extends Entity> Stream<T> get(Class<T> clazz) throws DataAccessException {
-        Crud<T> dao = getClassDao(clazz);
+        Crud<T> dao = getDaoClass(clazz);
         if(dao == null) throw new DataAccessRuntimeException(String.format("La clase '%s' no se registro como clase DAO", clazz.getName()));
 
         return dao.get();
     }
 
     public <T extends Entity> boolean delete(Class<T> clazz, int id) throws DataAccessException {
-        Crud<T> dao = getClassDao(clazz);
+        Crud<T> dao = getDaoClass(clazz);
         if(dao == null) throw new DataAccessRuntimeException(String.format("La clase '%s' no se registro como clase DAO", clazz.getName()));
 
         return dao.delete(id);
@@ -125,14 +125,14 @@ public class Dao {
     @SuppressWarnings("unchecked")
     public <T extends Entity> void insert(T object) throws DataAccessException {
         Class<T> clazz = (Class<T>) object.getClass();
-        Crud<T> dao = getClassDao(clazz);
+        Crud<T> dao = getDaoClass(clazz);
         if(dao == null) throw new DataAccessRuntimeException(String.format("La clase '%s' no se registro como clase DAO", clazz.getName()));
 
         dao.insert(object);
     }
 
     public <T extends Entity> void insert(Class<T> clazz, Iterable<T> objs) throws DataAccessException {
-        Crud<T> dao = getClassDao(clazz);
+        Crud<T> dao = getDaoClass(clazz);
         if(dao == null) throw new DataAccessRuntimeException(String.format("La clase '%s' no se registro como clase DAO", clazz.getName()));
 
         dao.insert(objs);
@@ -143,7 +143,7 @@ public class Dao {
         if(objs.length == 0) return;
 
         Class<T> clazz = (Class<T>) objs[0].getClass();
-        Crud<T> dao = getClassDao(clazz);
+        Crud<T> dao = getDaoClass(clazz);
         if(dao == null) throw new DataAccessRuntimeException(String.format("La clase '%s' no se registro como clase DAO", clazz.getName()));
 
         dao.insert(objs);
@@ -152,14 +152,14 @@ public class Dao {
     @SuppressWarnings("unchecked")
     public <T extends Entity> boolean update(T object) throws DataAccessException {
         Class<T> clazz = (Class<T>) object.getClass();
-        Crud<T> dao = getClassDao(clazz);
+        Crud<T> dao = getDaoClass(clazz);
         if(dao == null) throw new DataAccessRuntimeException(String.format("La clase '%s' no se registro como clase DAO", clazz.getName()));
 
         return ((Crud<T>) dao).update(object);
     }
 
     public <T extends Entity> boolean update(Class<T> clazz, int oldId, int newId) throws DataAccessException {
-        Crud<T> dao = getClassDao(clazz);
+        Crud<T> dao = getDaoClass(clazz);
         if(dao == null) throw new DataAccessRuntimeException(String.format("La clase '%s' no se registro como clase DAO", clazz.getName()));
 
         return dao.update(oldId, newId);
