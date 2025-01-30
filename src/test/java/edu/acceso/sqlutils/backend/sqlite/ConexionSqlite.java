@@ -24,11 +24,19 @@ public class ConexionSqlite extends DaoConnection {
      * Si la url+username+password coincide con una que ya se haya utilizado, no se crea un objeto
      * distinto, sino que se devuelve el objeto que se creó anteriormente.
      * @param opciones Las opciones de conexión.
+     * @param scriptSql El archivo con el guión SQL que crea el esquema en la base de datos.
+     * @param daoClasses Las clases DAO que se usarán con la conexión para hacer persistentes los objetos.
      */
     public ConexionSqlite(Map<String, Object> opciones, Path scriptSql, Class<?> ... daoClasses) throws DataAccessException {
         super(opciones, scriptSql, daoClasses);
     }
 
+    // No he implementados los otros dos constructores posibles, porque no los usaré.
+
+    /**
+     * Crea el pool de conexiones.
+     * @param opciones Las opciones para crear el pool.
+     */
     @Override
     protected DataSource createDataSource(Map<String, Object> opciones) {
         String path = (String) opciones.get("url");
@@ -47,6 +55,11 @@ public class ConexionSqlite extends DaoConnection {
         return new HikariDataSource(hconfig);
     }
 
+    /**
+     * Define cómo se diferencias unas conexiones de otras.
+     * En el caso de SQLite, sólo por la URL, ya que no hay credenciales.
+     * @param opciones Las opciones de conexión.
+     */
     @Override
     protected String generateKey(Map<String, Object> opciones) {
         return (String) opciones.get("url");

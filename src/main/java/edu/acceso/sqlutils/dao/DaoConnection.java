@@ -152,7 +152,7 @@ public abstract class DaoConnection {
 
     /**
      * Obtiene en forma de array todas las clases DAO registradas.
-     * @return
+     * @return Las clases DAO registradas.
      */
     @SuppressWarnings("unchecked")
     public Class<? extends Crud<? extends Entity>>[] getDaoClasses() {
