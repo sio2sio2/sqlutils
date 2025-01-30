@@ -6,9 +6,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import edu.acceso.sqlutils.backend.BackendFactory;
 import edu.acceso.sqlutils.backend.sqlite.CentroSqlite;
+import edu.acceso.sqlutils.backend.sqlite.ConexionSqlite;
 import edu.acceso.sqlutils.backend.sqlite.EstudianteSqlite;
+import edu.acceso.sqlutils.dao.BackendFactory;
 import edu.acceso.sqlutils.dao.Dao;
 import edu.acceso.sqlutils.dao.DaoConnection;
 import edu.acceso.sqlutils.errors.DataAccessException;
@@ -31,12 +32,20 @@ public class Test {
             "password", ""
         );
 
-        // Establecemos una conexión con el backend y obtenemos
-        // los objetos que nos sirven para recuperar y guardar objetos.
-        DaoConnection conexion = BackendFactory.crearConexion(opciones, CentroSqlite.class, EstudianteSqlite.class);
+        // Esta es el tipo de base de datos que usaremos para persistencia (sqlite)
+        String base = (String) opciones.get("base");
+
+        DaoConnection conexion = new BackendFactory()
+            // Registramos todos los tipos de bases de datos soportados
+            .register("SQLITE", ConexionSqlite.class)
+            .register("MARIADB", null) // No hay soporte, pero se espera que lo haya en el futuro.  
+            // Escogemos el conector adecuado e indicamos las clases DAO.
+            .createConnection(base, opciones, CentroSqlite.class, EstudianteSqlite.class);
+
+        // Obtenemos el objeto Dao que nos sirve para la persistencia de centros y estudiantes
         Dao dao = conexion.getDao();
 
-        // Obtiene un centro existente.
+        // Empezamos a operar usando el objeto anterior
         Centro castillo = null;
         try {
             castillo = dao.get(Centro.class, 11004866).orElse(null);
@@ -81,7 +90,7 @@ public class Test {
             System.exit(1);
         }
 
-        // Intentamos actualizar ambos estudiantes en una transacción.
+        // Ejemplo de transacción: intentamos actualizar ambos estudiantes.
         try {
             conexion.transaction(xDao -> {
                 Estudiante e1 = xDao.get(Estudiante.class, 1).orElse(null);
@@ -98,6 +107,7 @@ public class Test {
             System.err.printf("No se actualizan los dos estudiantes: %s\n", err.getMessage());
         }
 
+        // Comprobación de que ningún estudiante se actualizó
         System.out.println("-- \nLista de estudiantes:");
         try(Stream<Estudiante> estudiantes = dao.get(Estudiante.class)) {
             estudiantes.forEach(System.out::println);
