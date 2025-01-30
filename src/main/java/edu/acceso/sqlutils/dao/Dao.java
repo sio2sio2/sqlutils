@@ -54,7 +54,7 @@ public class Dao {
      * @param source El objeto que necesita el constructor.
      */
     @SuppressWarnings("unchecked")
-    private void init(Object source, Class<? extends Crud<? extends Entity>> ... daoClasses) {
+    private void init(Object source, Class<? extends Crud<? extends Entity>>[] daoClasses) {
         for(var daoClass: daoClasses) {
             if(!AbstractDao.class.isAssignableFrom(daoClass)) {
                 throw new DataAccessRuntimeException(String.format("La clase '%s' debe extender AbstractDao", daoClass.getName()));
@@ -71,15 +71,15 @@ public class Dao {
         }
     }
 
-    public Dao(DataSource ds, Class<? extends Crud<? extends Entity>> ... daoClasses) {
+    public Dao(DataSource ds, Class<? extends Crud<? extends Entity>>[] daoClasses) {
         init(ds, daoClasses);
     }
 
-    public Dao(Connection conn, Class<? extends Crud<? extends Entity>> ... daoClasses) {
+    public Dao(Connection conn, Class<? extends Crud<? extends Entity>>[] daoClasses) {
         init(conn, daoClasses);
     }
 
-    public Dao(ConnectionProvider cp, Class<? extends Crud<? extends Entity>> ... daoClasses) {
+    public Dao(ConnectionProvider cp, Class<? extends Crud<? extends Entity>>[] daoClasses) {
         init(cp, daoClasses);
     }
 
