@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import edu.acceso.sqlutils.backend.BackendFactory;
+import edu.acceso.sqlutils.backend.sqlite.CentroSqlite;
+import edu.acceso.sqlutils.backend.sqlite.EstudianteSqlite;
 import edu.acceso.sqlutils.dao.Dao;
 import edu.acceso.sqlutils.dao.DaoConnection;
 import edu.acceso.sqlutils.errors.DataAccessException;
@@ -31,7 +33,7 @@ public class Test {
 
         // Establecemos una conexión con el backend y obtenemos
         // los objetos que nos sirven para recuperar y guardar objetos.
-        DaoConnection conexion = BackendFactory.crearConexion(opciones);
+        DaoConnection conexion = BackendFactory.crearConexion(opciones, CentroSqlite.class, EstudianteSqlite.class);
         Dao dao = conexion.getDao();
 
         // Obtiene un centro existente.

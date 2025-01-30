@@ -34,10 +34,8 @@ public class ConexionSqlite extends DaoConnection {
      * distinto, sino que se devuelve el objeto que se creó anteriormente.
      * @param opciones Las opciones de conexión.
      */
-    public ConexionSqlite(Map<String, Object> opciones) throws DataAccessException {
-        super(opciones);
-        registerDaoClass(CentroSqlite.class);
-        registerDaoClass(EstudianteSqlite.class);
+    public ConexionSqlite(Map<String, Object> opciones, Class<?> ... daoClasses) throws DataAccessException {
+        super(opciones, daoClasses);
         initDB();
     }
 

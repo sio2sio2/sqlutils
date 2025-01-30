@@ -39,13 +39,13 @@ public class BackendFactory {
         }
     };
 
-    public static DaoConnection crearConexion(Map<String, Object> opciones) {
+    public static DaoConnection crearConexion(Map<String, Object> opciones, Class<?> ... daoClasses) {
         Backend backend = Backend.getBackend((String) opciones.get("base"));
         if(backend == null) throw new IllegalArgumentException(String.format("'%s': formato desconocido", opciones.get("base")));
         if(backend.noImplementado()) throw new UnsupportedOperationException(String.format("'%s': formato no soportado", opciones.get("base")));
 
         try {
-            return backend.get().getDeclaredConstructor(Map.class).newInstance(opciones);
+            return backend.get().getDeclaredConstructor(Map.class, Class[].class).newInstance(opciones, daoClasses);
         } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException
                 | NoSuchMethodException | SecurityException err) {
             throw new RuntimeException(err);

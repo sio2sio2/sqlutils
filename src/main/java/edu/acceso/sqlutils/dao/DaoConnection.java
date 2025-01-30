@@ -24,8 +24,12 @@ public abstract class DaoConnection {
     protected final DataSource ds;
     protected List<Class<? extends Crud<? extends Entity>>> daoClasses = new ArrayList<>();
 
-    public DaoConnection(Map<String, Object> options) throws DataAccessException {
+    @SuppressWarnings("unchecked")
+    public DaoConnection(Map<String, Object> options, Class<?>[] daoClasses) throws DataAccessException {
         ds = getDataSource(options);
+        for(var daoClass: daoClasses) {
+            registerDaoClass((Class<? extends Crud<? extends Entity>>) daoClass);
+        }
     }
 
     /**
