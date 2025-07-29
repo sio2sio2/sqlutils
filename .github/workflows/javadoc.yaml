@@ -1,0 +1,35 @@
+name: Generación automática de Javadoc
+
+on:
+  push:
+    branches: [ main, master ]
+
+env:
+  PUBLISH_DIR: target/reports/apidocs  # Ruta predeterminada
+  DESTINATION_DIR: .      # Raíz de gh-pages
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Obtener el código fuente del repositorio
+      uses: actions/checkout@v4
+
+    - name: Instalar Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: 'maven'
+
+    - name: Generar Javadoc
+      run: mvn javadoc:javadoc
+
+    - name: Mover la documentación a gh-pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ${{ env.PUBLISH_DIR }}
+        keep_files: false
+        destination_dir: ${{ env.DESTINATION_DIR }}
