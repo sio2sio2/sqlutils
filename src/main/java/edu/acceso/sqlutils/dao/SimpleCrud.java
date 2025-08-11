@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -12,9 +13,8 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import edu.acceso.sqlutils.ConnProvider;
 import edu.acceso.sqlutils.SqlUtils;
-import edu.acceso.sqlutils.crud.Crud;
+import edu.acceso.sqlutils.crud.SimpleCrudInterface;
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
@@ -33,29 +33,9 @@ import edu.acceso.sqlutils.query.SqlTypesTranslator;
  * Esto es útil para transacciones que requieren múltiples operaciones CRUD.
  * </p>
  */
-public class DaoCrud<T extends Entity> implements Crud<T> {
+public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements SimpleCrudInterface<T> {
     /** Logger para registrar información y errores. */
-    private static final Logger logger = LoggerFactory.getLogger(DaoCrud.class);
-
-    /** DAO que proporciona acceso a datos relacionados. */
-    private final ConnProvider cp;
-    /** Clase que implementa las sentencias SQL para las operaciones CRUD. */
-    private final SqlQuery sqlQuery;
-    /**
-     * Fábrica de DAOs con la que se generó este objeto y que sirve para obtener entidades relacionadas
-     * (cuando la entidad tiene claves foráneas).
-     */
-    private final DaoFactory daoF;
-    /**
-     * Mapper de la entidad T que mapea registros de la base de datos a objetos de tipo T.
-     * Este mapper es responsable de convertir filas de ResultSet en instancias de T y viceversa.
-     */
-    private final EntityMapper<T> mapper;
-    /**
-     * Cargador de relaciones que se utiliza para cargar entidades relacionadas.
-     * Este cargador es responsable de manejar las relaciones entre entidades y cargar datos adicionales según sea necesario.
-     */
-    private final RelationLoader loader;
+    private static final Logger logger = LoggerFactory.getLogger(SimpleCrud.class);
 
     /**
      * Constructor que recibe un {@link DataSource} y una clase que implementa {@link SqlQuery}.
@@ -63,16 +43,9 @@ public class DaoCrud<T extends Entity> implements Crud<T> {
      * @param mapper El EntityMapper que mapea entidades a registros de la base de
      * @param daoF La fábrica de DAOs que se utilizará para obtener entidades relacionadas.
      */
-    @SuppressWarnings("unchecked")
-    public DaoCrud(DataSource ds, Class<T> entityClass, DaoFactory daoF) {
-        this.cp = new ConnProvider(ds);
-        this.daoF = daoF;
-        this.mapper = (EntityMapper<T>) daoF.mappers.get(entityClass);
-        if (mapper == null) {
-            throw new IllegalArgumentException(String.format("La entidad %s no está registrada", entityClass.getSimpleName()));
-        }
-        this.sqlQuery = createSqlQueryInstance(daoF.sqlQueryClass, mapper);
-        this.loader = createRelationLoaderInstance(daoF.loaderClass);
+    public SimpleCrud(DataSource ds, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
+                      Class<? extends SqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
+        super(ds, entityClass, mappers, sqlQueryClass, loaderClass);
     }
 
     /**
@@ -81,109 +54,25 @@ public class DaoCrud<T extends Entity> implements Crud<T> {
      * @param mapper El EntityMapper que mapea entidades a registros de la base de
      * @param daoF La fábrica de DAOs que se utilizará para obtener entidades relacionadas.
      */
-    @SuppressWarnings("unchecked")
-    public DaoCrud(Connection conn, Class<T> entityClass, DaoFactory daoF) {
-        this.cp = new ConnProvider(conn);
-        this.mapper = (EntityMapper<T>) daoF.mappers.get(entityClass);
-        if (mapper == null) {
-            throw new IllegalArgumentException(String.format("La entidad %s no está registrada", entityClass.getSimpleName()));
-        }
-        this.daoF = daoF;
-        this.sqlQuery = createSqlQueryInstance(daoF.sqlQueryClass, mapper);
-        this.loader = createRelationLoaderInstance(daoF.loaderClass);
+    public SimpleCrud(Connection conn, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
+                      Class<? extends SqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
+        super(conn, entityClass, mappers, sqlQueryClass, loaderClass);
     }
 
     /**
-     * Constructor que crea una nueva instancia de {@link DaoCrud} a partir de otro {@link DaoCrud}.
+     * Constructor que crea una nueva instancia de {@link SimpleCrud} a partir de otro {@link SimpleCrud}.
      * 
      * <p>
-     * Un {@link DaoCrud} obtenido de este modo comparte el cargador de relaciones (véase
+     * Un {@link SimpleCrud} obtenido de este modo comparte el cargador de relaciones (véase
      * {@link RelationLoader}) con el original, lo que permite que éste conserve el historial
      * de todas las relaciones cargadas.
      * </p>
-     * @param <E> Tipo de entidad del {@link DaoCrud} original.
-     * @param dao El {@link DaoCrud} original a partir del cual se obtiene el nuevo.
-     * @param entityClass La clase de la entidad que maneja el nuevo {@link DaoCrud}.
+     * @param <E> Tipo de entidad del {@link SimpleCrud} original.
+     * @param dao El {@link SimpleCrud} original a partir del cual se obtiene el nuevo.
+     * @param entityClass La clase de la entidad que maneja el nuevo {@link SimpleCrud}.
      */
-    @SuppressWarnings("unchecked")
-    public <E extends Entity> DaoCrud(DaoCrud<E> dao, Class<T> entityClass) {
-        this.cp = dao.cp;
-        this.mapper = (EntityMapper<T>) dao.daoF.mappers.get(entityClass);
-        if (mapper == null) {
-            throw new IllegalArgumentException(String.format("La entidad %s no está registrada", entityClass.getSimpleName()));
-        }
-        this.daoF = dao.daoF;
-        this.sqlQuery = createSqlQueryInstance(daoF.sqlQueryClass, mapper);
-        this.loader = dao.loader;
-    }
-
-    /**
-     * Obtiene la fábrica de DAOs asociada a este {@link DaoCrud}.
-     * @return La fábrica de DAOs.
-     */
-    DaoFactory getDaoFactory() {
-        return daoF;
-    }
-
-    /**
-     * Crea una instancia de RelationLoader utilizando la clase proporcionada.
-     * @param loaderClass La clase que implementa RelationLoader.
-     * @return Una instancia de RelationLoader.
-     */
-    private RelationLoader createRelationLoaderInstance(Class<? extends RelationLoader> loaderClass) {
-        try {
-            return loaderClass.getConstructor(DaoCrud.class)
-                .newInstance(this);
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException("Error al crear instancia de RelationLoader", e);
-        }
-    }
-
-    /**
-     * Crea una instancia de SqlQuery utilizando la clase proporcionada.
-     * @param sqlQueryClass La clase que implementa SqlQuery.
-     * @return Una instancia de SqlQuery.
-     */
-    private static SqlQuery createSqlQueryInstance(Class<? extends SqlQuery> sqlQueryClass, EntityMapper<? extends Entity> mapper) {
-        try {
-            return sqlQueryClass.getConstructor(String.class, String.class, String[].class).newInstance(
-                mapper.getTableInfo().tableName(),
-                mapper.getTableInfo().idColumn().name(),
-                mapper.getTableInfo().getColumnNames()
-            );
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException("Error al crear instancia de SqlQuery", e);
-        }
-    }
-
-    /**
-     * Obtiene el traductor de tipos SQL para un campo y un valor dado.
-     * El método permite saber cómo traducir a SQL el valor de un campo
-     * al usar {@link #get(String, Object)}.
-     * @param field El campo para el que se obtiene el traductor.
-     * @param value El valor para el que se obtiene el traductor.
-     * @return Un traductor de tipos SQL para el campo y el valor dados.
-     */
-    private SqlTypesTranslator getTranslator(String field, Object value) {
-        Class<?> attrClass = mapper.getTableInfo().getFieldType(field);
-        // No se incluyó la información del tipo en el mapper,
-        // por lo que hay que averiguarlo por reflexión.
-        if(attrClass == null) {
-            Class<? extends Entity> entityClass = daoF.mappers.entrySet()
-                .stream()
-                .filter(e -> e.getValue().getClass().isAssignableFrom(mapper.getClass()))
-                .map(e -> e.getKey())
-                .findFirst().orElse(null);
-            assert entityClass != null: "No se encontró la clase de entidad asociada al mapper";
-            try {
-                attrClass = entityClass.getDeclaredField(field).getType();
-            } catch (NoSuchFieldException e) {
-                throw new RuntimeException(String.format("El campo %s no existe en la entidad %s", field, entityClass.getSimpleName()), e);
-            }
-        }
-        return (Entity.class.isAssignableFrom(attrClass))
-            ? new SqlTypesTranslator(Long.class, ((Entity) value).getId())
-            : new SqlTypesTranslator(attrClass, value);
+    public <E extends Entity> SimpleCrud(SimpleCrud<E> dao, Class<T> entityClass) {
+        super(dao, entityClass);
     }
 
     @Override

@@ -2,7 +2,6 @@ package edu.acceso.sqlutils.crud;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Stream;
 
 import edu.acceso.sqlutils.errors.DataAccessException;
@@ -12,15 +11,7 @@ import edu.acceso.sqlutils.errors.DataAccessException;
  * sobre entidades de tipo T.
  * @param <T> Tipo de entidad que maneja esta implementación.
  */
-public interface Crud<T extends Entity> {
-
-    /**
-     * Obtiene una entidad a partir de su identificador.
-     * @param id Identificador de la entidad.
-     * @return La entidad requerida.
-     * @throws DataAccessException Si hubo algún problema en el acceso a los datos.
-     */
-    public Optional<T> get(Long id) throws DataAccessException;
+public interface SimpleCrudInterface<T extends Entity> extends MinimalCrudInterface<T> {
 
     /**
      * Obtiene la relación completa de entidades de un tipo.

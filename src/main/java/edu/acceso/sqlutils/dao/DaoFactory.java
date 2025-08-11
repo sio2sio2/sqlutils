@@ -10,7 +10,7 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import edu.acceso.sqlutils.crud.Crud;
+import edu.acceso.sqlutils.crud.SimpleCrudInterface;
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.relations.LoaderFactory;
@@ -31,13 +31,15 @@ public class DaoFactory {
     private static final Logger logger = LoggerFactory.getLogger(DaoFactory.class);
 
     /** Mapa que relaciona las clases de entidad con sus mappers. */
-    final Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers;
+    private final Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers;
     /** Fuente de datos utilizada para obtener conexiones a la base de datos. */
-    final DataSource ds;
+    private final DataSource ds;
     /** Clase que implementa las sentencias SQL para las operaciones CRUD. */
-    final Class<? extends SqlQuery> sqlQueryClass;
+    private final Class<? extends SqlQuery> sqlQueryClass;
     /** Clase que implementa el cargador de relaciones. */
-    final Class<? extends RelationLoader> loaderClass;
+    private final Class<? extends RelationLoader> loaderClass;
+
+    private final Class<? extends AbstractCrud<? extends Entity>> crudClass;
 
     /**
      * Constructor que recibe una fuente de datos, una clase que implementa {@link SqlQuery} y un {@link LoaderFactory}.
@@ -45,8 +47,9 @@ public class DaoFactory {
      * @param sqlQueryClass La clase que implementa las sentencias SQL para las operaciones CRUD.
      * @param loader La fábrica de cargadores de relaciones.
      */
-    private DaoFactory(DataSource ds, Class<? extends SqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
+    private DaoFactory(DataSource ds, Class<? extends AbstractCrud<? extends Entity>> crudClass, Class<? extends SqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
         this.ds = ds;
+        this.crudClass = crudClass;
         this.sqlQueryClass = sqlQueryClass;
         this.loaderClass = loaderClass;
         this.mappers = mappers;
@@ -55,13 +58,16 @@ public class DaoFactory {
     public static class Builder {
         private final Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers = new HashMap<>();
         private final Class<? extends SqlQuery> sqlQueryClass;
+        private final Class<? extends AbstractCrud<? extends Entity>> crudClass;
 
-        private Builder(Class<? extends SqlQuery> sqlQueryClass) {
+        private Builder(Class<? extends SqlQuery> sqlQueryClass, Class<? extends AbstractCrud<? extends Entity>> crudClass) {
             this.sqlQueryClass = sqlQueryClass;
+            this.crudClass = crudClass;
         }
 
-        public static Builder create(Class<? extends SqlQuery> sqlQueryClass) {
-            return new Builder(sqlQueryClass);
+        //public static Builder create(Class<? extends SqlQuery> sqlQueryClass, Class<? extends AbstractCrud<? extends Entity>> crudClass) {
+        public static <T extends AbstractCrud<? extends Entity>> Builder create(Class<? extends SqlQuery> sqlQueryClass, Class<T> crudClass) {
+            return new Builder(sqlQueryClass, crudClass);
         }
 
         /**
@@ -82,17 +88,23 @@ public class DaoFactory {
         }
 
         public DaoFactory get(DataSource ds, LoaderFactory loader) {
-            return new DaoFactory(ds, sqlQueryClass, loader.getLoaderClass(), mappers);
+            return new DaoFactory(ds, crudClass, sqlQueryClass, loader.getLoaderClass(), mappers);
         }
     }
 
     /**
-     * Obtiene un objeto {@link Crud} que permite realizar operaciones CRUD sobre una entidad específica.
+     * Obtiene un objeto {@link SimpleCrudInterface} que permite realizar operaciones CRUD sobre una entidad específica.
      * @param entityClass La clase de la entidad para la que se desea obtener el DAO.
-     * @return Un objeto {@link Crud} para la entidad especificada.
+     * @return Un objeto {@link SimpleCrudInterface} para la entidad especificada.
      */
-    public <T extends Entity> Crud<T> getDao(Class<T> entityClass) {
-        return new DaoCrud<>(ds, entityClass, this);
+    @SuppressWarnings("unchecked")
+    public <T extends Entity> AbstractCrud<T> getDao(Class<T> entityClass) {
+        try {
+            return (AbstractCrud<T>) crudClass.getConstructor(DataSource.class, Class.class, Map.class, Class.class, Class.class)
+                    .newInstance(ds, entityClass, mappers, sqlQueryClass, loaderClass);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(String.format("Error al crear la instancia de %s", crudClass.getSimpleName()), e);
+        }
     }
 
     /**
@@ -108,7 +120,7 @@ public class DaoFactory {
             try {
                 conn.setAutoCommit(false);
                 logger.debug("Se abre transacción");
-                operations.accept(new TransactionContext(conn, this));
+                operations.accept(new TransactionContext(conn, crudClass, sqlQueryClass, loaderClass, mappers));
                 conn.commit();
             } catch (DataAccessException | SQLException e) {
                 try {
@@ -125,5 +137,4 @@ public class DaoFactory {
             throw new DataAccessException("Error al obtener la conexión para la transacción", e);
         }
     }
-
 }

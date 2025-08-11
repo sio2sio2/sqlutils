@@ -2,9 +2,8 @@ package edu.acceso.sqlutils.dao.relations;
 
 import java.lang.reflect.Method;
 
-import edu.acceso.sqlutils.crud.Crud;
 import edu.acceso.sqlutils.crud.Entity;
-import edu.acceso.sqlutils.dao.DaoCrud;
+import edu.acceso.sqlutils.dao.AbstractCrud;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import javassist.util.proxy.MethodHandler;
 import javassist.util.proxy.ProxyFactory;
@@ -19,7 +18,7 @@ public class EagerLoader extends RelationLoader {
      * Constructor.
      * @param dao DAO a partir del cual se crea el cargador de relaciones
      */
-    public EagerLoader(DaoCrud<? extends Entity> dao) {
+    public EagerLoader(AbstractCrud<? extends Entity> dao) {
         super(dao);
     }
 
@@ -55,8 +54,8 @@ public class EagerLoader extends RelationLoader {
     
         registrar(relationEntity); // <-- Aquí se apunta en el historial (su entity aún es null)
 
-        Crud<E> daoCrud = getDao(entityClass);
-        E entity = daoCrud.get(id).orElse(null);   // <-- Aquí se carga la entidad relacionada.
+        AbstractCrud<E> daoCrud = getDao(entityClass);
+        E entity = (E) daoCrud.get(id).orElse(null);   // <-- Aquí se carga la entidad relacionada.
         if(entity == null) throw new DataAccessException(String.format("Problema de integridad referencial. ID %d usando como clave foránea no existe", id));
 
         relationEntity.setLoadedEntity(entity);  // <-- Aquí se establece el valor de loadedEntity.

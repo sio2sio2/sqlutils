@@ -2,9 +2,8 @@ package edu.acceso.sqlutils.dao.relations;
 
 import java.lang.reflect.Method;
 
-import edu.acceso.sqlutils.crud.Crud;
 import edu.acceso.sqlutils.crud.Entity;
-import edu.acceso.sqlutils.dao.DaoCrud;
+import edu.acceso.sqlutils.dao.AbstractCrud;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import javassist.util.proxy.MethodHandler;
 import javassist.util.proxy.ProxyFactory;
@@ -19,7 +18,7 @@ public class LazyLoader extends RelationLoader {
      * Constructor.
      * @param dao DAO a partir del cual se crea el cargador de relaciones
      */
-    public LazyLoader(DaoCrud<? extends Entity> dao) {
+    public LazyLoader(AbstractCrud<? extends Entity> dao) {
         super(dao);
     }
 
@@ -97,7 +96,7 @@ public class LazyLoader extends RelationLoader {
         @Override
         public Object invoke(Object self, Method method, Method proceed, Object[] args) throws Throwable {
             if(!isLoaded()) {
-                Crud<E> dao = loader.getDao(entityClass);
+                AbstractCrud<E> dao = loader.getDao(entityClass);
                 realEntity = dao.get(id).orElseThrow(
                     () -> new DataAccessException(String.format("Error de integridad referencial: no se encontró la entidad %s con ID %d", entityClass.getSimpleName(), id))
                 );

@@ -9,8 +9,8 @@ import org.slf4j.LoggerFactory;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import edu.acceso.sqlutils.backend.Backend;
-import edu.acceso.sqlutils.crud.Crud;
 import edu.acceso.sqlutils.dao.DaoFactory;
+import edu.acceso.sqlutils.dao.SimpleCrud;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.modelo.Centro;
 import edu.acceso.sqlutils.modelo.Estudiante;
@@ -46,8 +46,8 @@ public class Test {
             throw new RuntimeException("Esto sólo sirve para que el compilador no se queje");
         }
 
-        Crud<Centro> centroDao = daoFactory.getDao(Centro.class);
-        Crud<Estudiante> estudianteDao = daoFactory.getDao(Estudiante.class);
+        SimpleCrud<Centro> centroDao = (SimpleCrud<Centro>) daoFactory.getDao(Centro.class);
+        SimpleCrud<Estudiante> estudianteDao = (SimpleCrud<Estudiante>) daoFactory.getDao(Estudiante.class);
 
         Centro castillo = null;
         try {
@@ -93,7 +93,7 @@ public class Test {
         // Ejemplo de transacción: intentamos actualizar ambos estudiantes.
         try {
             daoFactory.transaction(tx -> {
-                Crud<Estudiante> eDao = tx.getDao(Estudiante.class); 
+                SimpleCrud<Estudiante> eDao = (SimpleCrud<Estudiante>) tx.getDao(Estudiante.class);
                 Estudiante e1 = eDao.get(1L).orElse(null);
                 Estudiante e2 = eDao.get(3L).orElse(null); // No existe.
 

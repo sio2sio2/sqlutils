@@ -1,11 +1,13 @@
 package edu.acceso.sqlutils.dao.tx;
 
 import java.sql.Connection;
+import java.util.Map;
 
-import edu.acceso.sqlutils.crud.Crud;
 import edu.acceso.sqlutils.crud.Entity;
-import edu.acceso.sqlutils.dao.DaoFactory;
-import edu.acceso.sqlutils.dao.DaoCrud;
+import edu.acceso.sqlutils.dao.AbstractCrud;
+import edu.acceso.sqlutils.dao.mapper.EntityMapper;
+import edu.acceso.sqlutils.dao.relations.RelationLoader;
+import edu.acceso.sqlutils.query.SqlQuery;
 
 /**
  * Contexto de transacción.
@@ -15,18 +17,26 @@ import edu.acceso.sqlutils.dao.DaoCrud;
 public class TransactionContext {
     /** Conexión común para todas las operaciones. */
     private final Connection conn;
-    /** Fábrica de DAOs para crear DAOs específicos de entidades. */
-    private final DaoFactory daoF;
+    private final Class<? extends AbstractCrud<? extends Entity>> crudClass;
+    private final Class<? extends SqlQuery> sqlQueryClass;
+    private final Class<? extends RelationLoader> loaderClass;
+    private final Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers;
 
     /**
      * Constructor del contexto de transacción.
      * 
      * @param conn Conexión a la base de datos
-     * @param daoF Fábrica de DAOs para crear DAOs específicos de entidades
+     * @param crudClass Clase que implementa las operaciones CRUD
+     * @param sqlQueryClass Clase que implementa las sentencias SQL
+     * @param loaderClass Clase que implementa el cargador de relaciones
+     * @param mappers Mapa de mappers de entidades
      */
-    public TransactionContext(Connection conn, DaoFactory dao) {
+    public TransactionContext(Connection conn, Class<? extends AbstractCrud<? extends Entity>> crudClass, Class<? extends SqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
         this.conn = conn;
-        this.daoF = dao;
+        this.crudClass = crudClass;
+        this.sqlQueryClass = sqlQueryClass;
+        this.loaderClass = loaderClass;
+        this.mappers = mappers;
     }
 
     /**
@@ -35,8 +45,14 @@ public class TransactionContext {
      * @param entityClass Clase de la entidad
      * @return DAO para la entidad especificada
      */
-    public <T extends Entity> Crud<T> getDao(Class<T> entityClass) {
-        return new DaoCrud<>(conn, entityClass, daoF);
+    @SuppressWarnings("unchecked")
+    public <T extends Entity> AbstractCrud<T> getDao(Class<T> entityClass) {
+        try {
+            return (AbstractCrud<T>) crudClass.getConstructor(Connection.class, Class.class, Map.class, Class.class, Class.class)
+                    .newInstance(conn, entityClass, mappers, sqlQueryClass, loaderClass);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(String.format("Error al crear la instancia de %s", crudClass.getSimpleName()), e);
+        }
     }
 
 }

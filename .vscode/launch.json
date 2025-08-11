@@ -13,7 +13,8 @@
             "name": "sqlutils (ejecución normal)",
             "request": "launch",
             "mainClass": "${config:miapp.package}.Test",
-            "args": ["-i", "esquema.sql", "-vv"]
+            //"args": ["-i", "esquema.sql", "-vv", "-u", "sqlite:caca.db"]
+            "args": ["-i", "esquema.sql", "-vv", "-u", "sqlite:file::memory:?cache=shared"]
         },
         {
             "type": "java",

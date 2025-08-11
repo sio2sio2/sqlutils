@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Objects;
 
 import edu.acceso.sqlutils.crud.Entity;
-import edu.acceso.sqlutils.dao.DaoCrud;
+import edu.acceso.sqlutils.dao.AbstractCrud;
 import edu.acceso.sqlutils.errors.DataAccessException;
 
 /**
@@ -19,7 +19,7 @@ import edu.acceso.sqlutils.errors.DataAccessException;
 public abstract class RelationLoader {
 
     /** DAO a partir de cual se crea el cargador. */
-    protected final DaoCrud<? extends Entity> originalDao;
+    protected final AbstractCrud<? extends Entity> originalDao;
     /** Historial de entidades cargadas para evitar duplicados. */
     protected final List<RelationEntity<? extends Entity>> historial = new ArrayList<>();
     /** Primera RelationEntity del ciclo, si existe. */
@@ -30,7 +30,7 @@ public abstract class RelationLoader {
      * 
      * @param dao DAO a partir del cual se crea el cargador de relaciones
      */
-    public RelationLoader(DaoCrud<? extends Entity> dao) {
+    public RelationLoader(AbstractCrud<? extends Entity> dao) {
         this.originalDao = dao;
     }
 
@@ -53,8 +53,14 @@ public abstract class RelationLoader {
      * @return DAO para la entidad especificada
      * @throws DataAccessException Si ocurre un error al generar el DAO
      */
-    protected <E extends Entity> DaoCrud<E> getDao(Class<E> entityClass) throws DataAccessException {
-        return new DaoCrud<>(originalDao, entityClass);
+    @SuppressWarnings("unchecked")
+    protected <E extends Entity> AbstractCrud<E> getDao(Class<E> entityClass) throws DataAccessException {
+        try {
+            return originalDao.getClass().getDeclaredConstructor(originalDao.getClass(), Class.class)
+                .newInstance(originalDao, entityClass);
+        } catch (ReflectiveOperationException e) {
+            throw new DataAccessException(String.format("No se pudo obtener el DAO para la entidad %s", entityClass.getSimpleName()), e);
+        }
     }
 
     /**
