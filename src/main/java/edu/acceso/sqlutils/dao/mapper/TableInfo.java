@@ -12,7 +12,7 @@ public record TableInfo( String tableName, Column idColumn, Column[] columns) {
      */
     public String[] getColumnNames() {
         return Arrays.stream(columns)
-                .map(Column::name)
+                .map(Column::getName)
                 .toArray(String[]::new);
     }
 
@@ -22,7 +22,7 @@ public record TableInfo( String tableName, Column idColumn, Column[] columns) {
      */
     public String[] getFieldNames() {
         return Arrays.stream(columns)
-                .map(Column::field)
+                .map(Column::getField)
                 .toArray(String[]::new);
     }
 
@@ -32,8 +32,8 @@ public record TableInfo( String tableName, Column idColumn, Column[] columns) {
      * @return true si el campo existe, false en caso contrario.
      */
     public boolean fieldExists(String fieldName) {
-        return fieldName.equalsIgnoreCase(idColumn.field()) || Arrays.stream(columns)
-                .anyMatch(column -> column.field().equalsIgnoreCase(fieldName));
+        return fieldName.equalsIgnoreCase(idColumn.getField()) || Arrays.stream(columns)
+                .anyMatch(column -> column.getField().equalsIgnoreCase(fieldName));
     }
 
     /**
@@ -42,7 +42,7 @@ public record TableInfo( String tableName, Column idColumn, Column[] columns) {
      * @return true si el campo es la clave primaria, false en caso contrario.
      */
     public boolean isIdColumn(String fieldName) {
-        return idColumn.field().equalsIgnoreCase(fieldName);
+        return idColumn.getField().equalsIgnoreCase(fieldName);
     }
 
     /**
@@ -53,12 +53,12 @@ public record TableInfo( String tableName, Column idColumn, Column[] columns) {
     public Class<?> getFieldType(String fieldName) {
         if (isIdColumn(fieldName)) return Long.class;
         return Arrays.stream(columns)
-                .filter(column -> column.field().equalsIgnoreCase(fieldName))
+                .filter(column -> column.getField().equalsIgnoreCase(fieldName))
                 .findFirst()
                 //.map(Column::fieldType)  // <-- ¿Por qué esto da error?
                 //.orElseThrow(() -> new IllegalArgumentException("Campo no encontrado: " + fieldName));
                 .orElseThrow(() -> new IllegalArgumentException("Campo no encontrado: " + fieldName))
-                .fieldType();
+                .getFieldType();
     }
 
     /**
@@ -67,11 +67,11 @@ public record TableInfo( String tableName, Column idColumn, Column[] columns) {
      * @return Nombre de la columna SQL.
      */
     public String getColumnName(String fieldName) {
-        if (isIdColumn(fieldName)) return idColumn.name();
+        if (isIdColumn(fieldName)) return idColumn.getName();
         return Arrays.stream(columns)
-                .filter(column -> column.field().equalsIgnoreCase(fieldName))
+                .filter(column -> column.getField().equalsIgnoreCase(fieldName))
                 .findFirst()
-                .map(Column::name)
+                .map(Column::getName)
                 .orElseThrow(() -> new IllegalArgumentException("Campo no encontrado: " + fieldName));
     }
 }

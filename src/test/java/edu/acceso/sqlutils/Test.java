@@ -10,12 +10,12 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import edu.acceso.sqlutils.backend.Backend;
 import edu.acceso.sqlutils.dao.DaoFactory;
-import edu.acceso.sqlutils.dao.SimpleCrud;
+import edu.acceso.sqlutils.dao.crud.SimpleCrud;
+import edu.acceso.sqlutils.dao.query.SqlQuery;
+import edu.acceso.sqlutils.dao.query.SqlQueryFactory;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.modelo.Centro;
 import edu.acceso.sqlutils.modelo.Estudiante;
-import edu.acceso.sqlutils.query.SqlQuery;
-import edu.acceso.sqlutils.query.SqlQueryFactory;
 
 public class Test {
     private static final DateTimeFormatter df = DateTimeFormatter.ofPattern("dd/MM/yyyy");

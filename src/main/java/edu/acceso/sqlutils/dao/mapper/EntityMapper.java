@@ -11,7 +11,6 @@ import java.sql.Types;
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
 import edu.acceso.sqlutils.errors.DataAccessException;
-import edu.acceso.sqlutils.query.SqlTypesTranslator;
 
 /**
  * Interfaz genérica para operaciones de acceso a datos orientadas a objetos.
@@ -40,23 +39,29 @@ public interface EntityMapper<T extends Entity> {
         for (int i = 0; i < columns.length; i++) {
             Column column = columns[i];
             try {
-                Field field = entity.getClass().getDeclaredField(column.field());
+                Field field = entity.getClass().getDeclaredField(column.getField());
                 field.setAccessible(true);
                 Object value = field.get(entity);
-                Class<?> fieldType = column.fieldType() != null ? column.fieldType() : field.getType();
+                Class<?> fieldType = column.getFieldType() != null ? column.getFieldType() : field.getType();
                 int sqlType;
                 if(Column.isForeignKey(fieldType)) {
                     if(value != null) value = ((Entity) value).getId();
                     sqlType = Types.BIGINT;
                 }
                 else {
+                    // Si hay definido un traductor, se utiliza para serializar el valor
+                    // y el tipo de dato debe ser el del valor serializado.
+                    if(column.getTranslator() != null) {
+                        value = column.getTranslator().serialize(value);
+                        fieldType = value.getClass();
+                    }
                     SqlTypesTranslator translator = new SqlTypesTranslator(fieldType, value);
                     sqlType = translator.getType();
                     value = translator.getSqlValue();
                 }
                 pstmt.setObject(i + 1, value, sqlType);
             } catch (NoSuchFieldException | IllegalAccessException e) {
-                throw new RuntimeException("Error al acceder al campo: " + column.field(), e);
+                throw new RuntimeException("Error al acceder al campo: " + column.getField(), e);
             }
         }
         // Establecer el ID de la entidad al final (véase {@link SqlQuery})
@@ -81,30 +86,31 @@ public interface EntityMapper<T extends Entity> {
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Error al crear una instancia de la entidad. ¿Tiene un constructor sin parámetros?", e);
         }
-        entity.setId(rs.getLong(getTableInfo().idColumn().name()));
+        entity.setId(rs.getLong(getTableInfo().idColumn().getName()));
 
         for(Column column : getTableInfo().columns()) {
             try {
-                Field field = entity.getClass().getDeclaredField(column.field());
+                Field field = entity.getClass().getDeclaredField(column.getField());
                 field.setAccessible(true);
 
                 Object value = null;
-                Class<?> fieldType = column.fieldType() != null ? column.fieldType() : field.getType();
+                Class<?> fieldType = column.getFieldType() != null ? column.getFieldType() : field.getType();
                 if(Column.isForeignKey(fieldType)) {
-                    value = rs.getObject(column.name(), Long.class);
+                    value = rs.getObject(column.getName(), Long.class);
                     try {
                         if(value != null) value = loader.loadEntity((Class<? extends Entity>) fieldType, (Long) value);
                     } catch (DataAccessException e) {
-                        throw new SQLException(String.format("Error al cargar la entidad relacionada: %s", column.field()), e.getCause());
+                        throw new SQLException(String.format("Error al cargar la entidad relacionada: %s", column.getField()), e.getCause());
                     }
                 } else {
-                    value = rs.getObject(column.name(), fieldType);
+                    value = column.getTranslator() != null
+                        ? column.getTranslator().deserialize(value = rs.getObject(column.getName()))
+                        : rs.getObject(column.getName(), fieldType);
                 }
-
                 field.set(entity, value);
 
             } catch (NoSuchFieldException | IllegalAccessException e) {
-                throw new RuntimeException("Error al acceder al campo: " + column.field(), e);
+                throw new RuntimeException("Error al acceder al campo: " + column.getField(), e);
             }
         }
 

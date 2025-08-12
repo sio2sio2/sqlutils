@@ -4,10 +4,10 @@ import java.sql.Connection;
 import java.util.Map;
 
 import edu.acceso.sqlutils.crud.Entity;
-import edu.acceso.sqlutils.dao.AbstractCrud;
+import edu.acceso.sqlutils.dao.crud.AbstractCrud;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
+import edu.acceso.sqlutils.dao.query.SqlQuery;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
-import edu.acceso.sqlutils.query.SqlQuery;
 
 /**
  * Contexto de transacción.

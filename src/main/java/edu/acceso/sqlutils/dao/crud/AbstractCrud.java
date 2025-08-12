@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils.dao;
+package edu.acceso.sqlutils.dao.crud;
 
 import java.sql.Connection;
 import java.util.Map;
@@ -9,9 +9,9 @@ import edu.acceso.sqlutils.ConnProvider;
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.crud.MinimalCrudInterface;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
+import edu.acceso.sqlutils.dao.mapper.SqlTypesTranslator;
+import edu.acceso.sqlutils.dao.query.SqlQuery;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
-import edu.acceso.sqlutils.query.SqlQuery;
-import edu.acceso.sqlutils.query.SqlTypesTranslator;
 
 /** 
  * Clase que implementa las operaciones CRUD para una entidad genérica T.
@@ -129,7 +129,7 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
         try {
             return sqlQueryClass.getConstructor(String.class, String.class, String[].class).newInstance(
                 mapper.getTableInfo().tableName(),
-                mapper.getTableInfo().idColumn().name(),
+                mapper.getTableInfo().idColumn().getName(),
                 mapper.getTableInfo().getColumnNames()
             );
         } catch (ReflectiveOperationException e) {

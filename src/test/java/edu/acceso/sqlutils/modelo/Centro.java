@@ -18,7 +18,7 @@ public class Centro implements Entity {
     /**
      * Titularidad: pública o privada.
      */
-    private String titularidad;
+    private Titularidad titularidad;
 
     public Centro() {
         super();
@@ -31,7 +31,7 @@ public class Centro implements Entity {
      * @param titularidad Titularidad del centro.
      * @return El propio objeto.
      */
-    public Centro inicializar(Long id, String nombre, String titularidad) {
+    public Centro inicializar(Long id, String nombre, Titularidad titularidad) {
         setId(id);
         setNombre(nombre);
         setTitularidad(titularidad);
@@ -44,7 +44,7 @@ public class Centro implements Entity {
      * @param nombre Nombre del centro.
      * @param titularidad Titularidad del centro (pública o privada)
      */
-    public Centro(Long id, String nombre, String titularidad) {
+    public Centro(Long id, String nombre, Titularidad titularidad) {
         inicializar(id, nombre, titularidad);
     }
 
@@ -64,11 +64,11 @@ public class Centro implements Entity {
         this.nombre = nombre;
     }
 
-    public String getTitularidad() {
+    public Titularidad getTitularidad() {
         return titularidad;
     }
 
-    public void setTitularidad(String titularidad) {
+    public void setTitularidad(Titularidad titularidad) {
         this.titularidad = titularidad;
     }
 

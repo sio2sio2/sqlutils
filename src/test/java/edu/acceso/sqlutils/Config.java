@@ -15,8 +15,8 @@ import org.slf4j.LoggerFactory;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
-import edu.acceso.sqlutils.query.SqlQuery;
-import edu.acceso.sqlutils.query.SqlQueryFactory;
+import edu.acceso.sqlutils.dao.query.SqlQuery;
+import edu.acceso.sqlutils.dao.query.SqlQueryFactory;
 
 /**
  * Contiene la configuración del programa. Para asegurarnos de su unicidad

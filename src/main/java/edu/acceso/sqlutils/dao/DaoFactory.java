@@ -12,13 +12,14 @@ import org.slf4j.LoggerFactory;
 
 import edu.acceso.sqlutils.crud.SimpleCrudInterface;
 import edu.acceso.sqlutils.crud.Entity;
+import edu.acceso.sqlutils.dao.crud.AbstractCrud;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
+import edu.acceso.sqlutils.dao.query.SqlQuery;
 import edu.acceso.sqlutils.dao.relations.LoaderFactory;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
 import edu.acceso.sqlutils.dao.tx.TransactionContext;
 import edu.acceso.sqlutils.dao.tx.TransactionalOperation;
 import edu.acceso.sqlutils.errors.DataAccessException;
-import edu.acceso.sqlutils.query.SqlQuery;
 
 /** 
  * Fábrica de DAOs que permite crear objetos DAO para realizar operaciones CRUD

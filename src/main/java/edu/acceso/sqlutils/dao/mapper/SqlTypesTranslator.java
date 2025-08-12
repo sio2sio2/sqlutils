@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils.query;
+package edu.acceso.sqlutils.dao.mapper;
 
 import java.sql.Date;
 import java.sql.Time;
@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 /**
- * Clase para traducir tipos de datos entre Java y SQL.
+ * Clase para traducir tipos de datos básicos entre Java y SQL.
  */
 public class SqlTypesTranslator {
 

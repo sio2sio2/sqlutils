@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils.query;
+package edu.acceso.sqlutils.dao.query;
 
 import java.util.Collections;
 

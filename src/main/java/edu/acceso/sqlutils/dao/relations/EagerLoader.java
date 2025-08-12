@@ -3,7 +3,7 @@ package edu.acceso.sqlutils.dao.relations;
 import java.lang.reflect.Method;
 
 import edu.acceso.sqlutils.crud.Entity;
-import edu.acceso.sqlutils.dao.AbstractCrud;
+import edu.acceso.sqlutils.dao.crud.AbstractCrud;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import javassist.util.proxy.MethodHandler;
 import javassist.util.proxy.ProxyFactory;

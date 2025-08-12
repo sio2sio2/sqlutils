@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Objects;
 
 import edu.acceso.sqlutils.crud.Entity;
-import edu.acceso.sqlutils.dao.AbstractCrud;
+import edu.acceso.sqlutils.dao.crud.AbstractCrud;
 import edu.acceso.sqlutils.errors.DataAccessException;
 
 /**

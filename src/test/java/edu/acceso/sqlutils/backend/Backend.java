@@ -13,7 +13,7 @@ import edu.acceso.sqlutils.SqlUtils;
 import edu.acceso.sqlutils.backend.mappers.CentroMapper;
 import edu.acceso.sqlutils.backend.mappers.EstudianteMapper;
 import edu.acceso.sqlutils.dao.DaoFactory;
-import edu.acceso.sqlutils.dao.SimpleCrud;
+import edu.acceso.sqlutils.dao.crud.SimpleCrud;
 import edu.acceso.sqlutils.dao.relations.LoaderFactory;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.modelo.Centro;
