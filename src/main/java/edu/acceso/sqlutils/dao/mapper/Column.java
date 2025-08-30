@@ -14,6 +14,12 @@ public class Column {
     private Class<?> fieldType;
     private Translator translator;
 
+    /**
+     * Constructor que crea una columna a partir de su nombre, campo y tipo de dato.
+     * @param name Nombre de la columna
+     * @param field Campo asociado en la entidad
+     * @param fieldType Tipo de dato del campo
+     */
     public Column(String name, String field, Class<?> fieldType) {
         this.name = name;
         this.field = field;
@@ -31,6 +37,12 @@ public class Column {
         this(name, field, (Class<?>) null);
     }
 
+    /**
+     * Constructor que acepta un {@link Translator} para definir cómo se realiza la traducción de la columna.
+     * @param name Nombre de la columna
+     * @param field Campo asociado en la entidad
+     * @param translator Traductor para la columna
+     */
     public Column(String name, String field, Translator translator) {
         this(name, field, (Class<?>) null);
         this.translator = translator;
@@ -46,18 +58,34 @@ public class Column {
         return Entity.class.isAssignableFrom(fieldType);
     }
 
+    /**
+     * Obtiene el nombre de la columna.
+     * @return El nombre de la columna.
+     */
     public String getName() {
         return name;
     }
 
+    /**
+     * Obtiene el campo asociado en la entidad.
+     * @return El campo asociado en la entidad.
+     */
     public String getField() {
         return field;
     }
 
+    /**
+     * Obtiene el tipo de dato del campo.
+     * @return El tipo de dato del campo.
+     */
     public Class<?> getFieldType() {
         return fieldType;
     }
 
+    /**
+     * Obtiene el traductor asociado a la columna.
+     * @return El traductor asociado a la columna.
+     */
     public Translator getTranslator() {
         return translator;
     }

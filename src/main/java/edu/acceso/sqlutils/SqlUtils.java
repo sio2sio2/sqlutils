@@ -74,10 +74,17 @@ public class SqlUtils {
     }
     
     /**
-     * Como Function<T, R> pero permite propagar una SQLException.
+     * Como Function&lt;T, R&gt; pero permite propagar una SQLException.
+     * @param <T> El tipo del argumento de la función.
+     * @param <R> El tipo del resultado de la función.
      */
     @FunctionalInterface
     public static interface CheckedFunction<T, R> {
+        /** Aplica la función
+         * @param t El argumento de la función.
+         * @return El resultado de la función.
+         * @throws SQLException Si ocurre un error al aplicar la función sobre la base de datos.
+         */
         R apply(T t) throws SQLException;
     }
 
@@ -101,13 +108,11 @@ public class SqlUtils {
 
     /**
      * Genera un flujo con las filas generadas en un ResultSet.
-     * @param ac  La sentencia que generó rs o la conexión sobre la que se
-     * 	          ejecutó la sentencia. Proporciónese una u otra dependiendo de
-     * 	          qué es lo que quiere cerrar automáticamente al cerrarse el
-     * 	          Stream resultante.
-     * @param rs Los resutados de una consulta.
+     * @param conn La conexión que generó el {@param ResultSet}.
+     * @param stmt La sentencia que generó el {@param ResultSet}.
+     * @param rs Los resultados de una consulta.
      * @return Un flujo en el que cada elemento es el siguiente estado del ResultSet proporcionado.
-     * @throws SQLException Cuando se produce un error al realizar la consulta.
+     * @throws DataAccessRuntimeException Cuando se produce un error al acceder a los datos.
      */
     public static Stream<ResultSet> resultSetToStream(Connection conn, Statement stmt, ResultSet rs) {
         return StreamSupport.stream(Spliterators.spliteratorUnknownSize(new ResultSetIterator(stmt, rs), Spliterator.ORDERED), false)
@@ -126,14 +131,12 @@ public class SqlUtils {
     /**
      * Genera un flujo de objetos derivados del resultado de una consulta.
      * @param <T> La clase del objeto.
-     * @param ac  La sentencia que generó rs o la conexión sobre la que se
-     * 	          ejecutó la sentencia. Proporciónese una u otra dependiendo de
-     * 	          qué es lo que quiere cerrar automáticamente al cerrarse el
-     * 	          Stream resultante.
+     * @param conn La conexión que generó el {@param ResultSet}.
+     * @param stmt La sentencia que generó el {@param ResultSet}.
      * @param rs  El objeto que representa los resultado de la consulta.
      * @param mapper La función que permite transformar la fila en un objeto (puede generar un SQLException).
      * @return El flujo de objetos.
-     * @throws SQLException Cuando Cuando se produce un error al realizar la consulta.
+     * @throws DataAccessRuntimeException Cuando se produce un error al acceder a los datos.
      */
     public static <T> Stream<T> resultSetToStream(Connection conn, Statement stmt, ResultSet rs, CheckedFunction<ResultSet, T> mapper) {
         return resultSetToStream(conn, stmt, rs).map(checkedToUnchecked(mapper));
@@ -143,7 +146,7 @@ public class SqlUtils {
      * Descompone un guión SQL en las sentencias de que se compone.
      * @param st Entrada de la que se lee el guión
      * @return  Una lista con las sentencias separadadas.
-     * @throws IOException
+     * @throws IOException Si ocurre un error al leer el flujo de entrada.
      */
     public static List<String> splitSQL(InputStream st) throws IOException {
         Pattern beginPattern = Pattern.compile("\\b(BEGIN|CASE)\\b", Pattern.CASE_INSENSITIVE);

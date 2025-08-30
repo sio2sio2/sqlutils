@@ -72,11 +72,9 @@ public interface EntityMapper<T extends Entity> {
      * Convierte un ResultSet a una entidad.
      *
      * @param rs ResultSet que contiene los datos de la entidad.
-     * @param conn Conexión a la base de datos.
-     * @param dao DAO utilizado para acceder a datos relacionados.
+     * @param loader Cargador de relaciones para entidades relacionadas.
      * @return Entidad convertida.
      * @throws SQLException Si ocurre un error al acceder a los datos.
-     * @throws DataAccessException Si ocurre un error de acceso a datos.
      */
     @SuppressWarnings("unchecked")
     default T resultSetToEntity(ResultSet rs, RelationLoader loader) throws SQLException {
@@ -120,6 +118,7 @@ public interface EntityMapper<T extends Entity> {
     /**
      * Obtiene la clase de la entidad a partir de la clase del objeto {@link EntityMapper} correspondiente.
      * @param entityMapperClass La clase DAO.
+     * @param <T> Tipo de la entidad.
      * @return La clase de la entidad para la que se definió la clase DAO.
      */
     @SuppressWarnings("unchecked")

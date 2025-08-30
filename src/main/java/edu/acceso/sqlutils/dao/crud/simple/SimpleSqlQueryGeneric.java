@@ -1,9 +1,9 @@
-package edu.acceso.sqlutils.dao.query;
+package edu.acceso.sqlutils.dao.crud.simple;
 
 import java.util.Collections;
 
 /** Clase que genera consultas SQL para operaciones CRUD básicas. */
-public class SqlQuery {
+public class SimpleSqlQueryGeneric implements SimpleSqlQuery {
 
     private final String tableName;
     private final String idColumn;
@@ -15,7 +15,7 @@ public class SqlQuery {
      * @param idColumn El nombre de la columna que representa el ID.
      * @param columns Los nombres de las columnas a actualizar.
      */
-    public SqlQuery(String tableName, String idColumn, String ... columns) {
+    public SimpleSqlQueryGeneric(String tableName, String idColumn, String ... columns) {
         this.tableName = tableName;
         this.idColumn = idColumn;
         this.columns = columns;

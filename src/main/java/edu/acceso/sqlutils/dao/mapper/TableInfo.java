@@ -4,6 +4,9 @@ import java.util.Arrays;
 
 /**
  * Clase que representa la información de una tabla en la base de datos.
+ * @param tableName Nombre de la tabla.
+ * @param idColumn Columna que representa la clave primaria.
+ * @param columns Columnas de la tabla.
  */
 public record TableInfo( String tableName, Column idColumn, Column[] columns) {
     /** 

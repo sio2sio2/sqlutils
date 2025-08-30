@@ -1,9 +1,11 @@
-package edu.acceso.sqlutils.crud;
+package edu.acceso.sqlutils.dao.crud.simple;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
+import edu.acceso.sqlutils.crud.Entity;
+import edu.acceso.sqlutils.crud.MinimalCrudInterface;
 import edu.acceso.sqlutils.errors.DataAccessException;
 
 /**

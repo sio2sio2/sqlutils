@@ -13,7 +13,8 @@ import edu.acceso.sqlutils.SqlUtils;
 import edu.acceso.sqlutils.backend.mappers.CentroMapper;
 import edu.acceso.sqlutils.backend.mappers.EstudianteMapper;
 import edu.acceso.sqlutils.dao.DaoFactory;
-import edu.acceso.sqlutils.dao.crud.SimpleCrud;
+import edu.acceso.sqlutils.dao.crud.DaoProvider;
+import edu.acceso.sqlutils.dao.crud.simple.SimpleListCrud;
 import edu.acceso.sqlutils.dao.relations.LoaderFactory;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.modelo.Centro;
@@ -49,8 +50,10 @@ public class Backend {
     public static DaoFactory createDaoFactory() throws DataAccessException {
         Config config = Config.getInstance();
         ConnectionPool cp = ConnectionPool.getInstance(config.getUrl(), config.getUser(), config.getPassword());
-        @SuppressWarnings("unchecked")
-        DaoFactory daoFactory = DaoFactory.Builder.create(config.getSqlQueryClass(), SimpleCrud.class)
+
+        DaoProvider daoProvider = new DaoProvider(SimpleListCrud.class, config.getSqlQueryClass());
+
+        DaoFactory daoFactory = DaoFactory.Builder.create(daoProvider)
             .registerMapper(CentroMapper.class)
             .registerMapper(EstudianteMapper.class)
             .get(cp.getDataSource(), LoaderFactory.LAZY);

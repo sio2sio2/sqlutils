@@ -24,7 +24,6 @@ public enum LoaderFactory {
 
     /**
      * Obtiene el cargador de relaciones correspondiente.
-     * @param dao DAO a partir del cual se crea el cargador de relaciones.
      * @return  La clase del cargador de relaciones seleccionado.
      */
     public Class<? extends RelationLoader> getLoaderClass() {

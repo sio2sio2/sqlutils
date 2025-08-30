@@ -10,11 +10,11 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import edu.acceso.sqlutils.crud.SimpleCrudInterface;
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.dao.crud.AbstractCrud;
+import edu.acceso.sqlutils.dao.crud.DaoProvider;
+import edu.acceso.sqlutils.dao.crud.simple.SimpleCrudInterface;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
-import edu.acceso.sqlutils.dao.query.SqlQuery;
 import edu.acceso.sqlutils.dao.relations.LoaderFactory;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
 import edu.acceso.sqlutils.dao.tx.TransactionContext;
@@ -35,40 +35,53 @@ public class DaoFactory {
     private final Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers;
     /** Fuente de datos utilizada para obtener conexiones a la base de datos. */
     private final DataSource ds;
-    /** Clase que implementa las sentencias SQL para las operaciones CRUD. */
-    private final Class<? extends SqlQuery> sqlQueryClass;
+    /** Proveedor de DAOs (que proporciona una implementación de las operaciones CRUD y una definición de las consultas SQL) */
+    private final DaoProvider daoProvider;
     /** Clase que implementa el cargador de relaciones. */
     private final Class<? extends RelationLoader> loaderClass;
 
-    private final Class<? extends AbstractCrud<? extends Entity>> crudClass;
-
     /**
-     * Constructor que recibe una fuente de datos, una clase que implementa {@link SqlQuery} y un {@link LoaderFactory}.
-     * @param ds Una fuente de datos para obtener conexiones a la base de datos.
-     * @param sqlQueryClass La clase que implementa las sentencias SQL para las operaciones CRUD.
-     * @param loader La fábrica de cargadores de relaciones.
+     * Constructor privado para la fábrica de DAOs.
+     * @param ds Fuente de datos para obtener conexiones a la base de datos.
+     * @param daoProvider Proveedor de DAOs 
+     * @param loaderClass Clase que implementa el cargador de relaciones.
+     * @param mappers Mapa de mappers de entidades.
      */
-    private DaoFactory(DataSource ds, Class<? extends AbstractCrud<? extends Entity>> crudClass, Class<? extends SqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
+    private DaoFactory(DataSource ds, DaoProvider daoProvider, Class<? extends RelationLoader> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
         this.ds = ds;
-        this.crudClass = crudClass;
-        this.sqlQueryClass = sqlQueryClass;
+        this.daoProvider = daoProvider;
         this.loaderClass = loaderClass;
         this.mappers = mappers;
     }
 
+    /**
+     * Clase que permite construir instancias de {@link DaoFactory}.
+     */
     public static class Builder {
+        /**
+         * Mapa de mappers de entidades.
+         */
         private final Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers = new HashMap<>();
-        private final Class<? extends SqlQuery> sqlQueryClass;
-        private final Class<? extends AbstractCrud<? extends Entity>> crudClass;
+        /**
+         * Proveedor de DAOs.
+         */
+        private final DaoProvider daoProvider;
 
-        private Builder(Class<? extends SqlQuery> sqlQueryClass, Class<? extends AbstractCrud<? extends Entity>> crudClass) {
-            this.sqlQueryClass = sqlQueryClass;
-            this.crudClass = crudClass;
+        /**
+         * Constructor privado para la clase Builder.
+         * @param daoProvider Proveedor de DAOs.
+         */
+        private Builder(DaoProvider daoProvider) {
+            this.daoProvider = daoProvider;
         }
 
-        //public static Builder create(Class<? extends SqlQuery> sqlQueryClass, Class<? extends AbstractCrud<? extends Entity>> crudClass) {
-        public static <T extends AbstractCrud<? extends Entity>> Builder create(Class<? extends SqlQuery> sqlQueryClass, Class<T> crudClass) {
-            return new Builder(sqlQueryClass, crudClass);
+        /**
+         * Crea una nueva instancia de {@link DaoFactory.Builder}.
+         * @param daoProvider Proveedor de DAOs.
+         * @return Una nueva instancia de {@link DaoFactory.Builder}.
+         */
+        public static Builder create(DaoProvider daoProvider) {
+            return new Builder(daoProvider);
         }
 
         /**
@@ -88,23 +101,30 @@ public class DaoFactory {
             return this;
         }
 
+        /**
+         * Genera una nueva instancia de {@link DaoFactory}.
+         * @param ds Fuente de datos para obtener conexiones a la base de datos.
+         * @param loader Cargador de relaciones.
+         * @return Una nueva instancia de {@link DaoFactory}.
+         */
         public DaoFactory get(DataSource ds, LoaderFactory loader) {
-            return new DaoFactory(ds, crudClass, sqlQueryClass, loader.getLoaderClass(), mappers);
+            return new DaoFactory(ds, daoProvider, loader.getLoaderClass(), mappers);
         }
     }
 
     /**
      * Obtiene un objeto {@link SimpleCrudInterface} que permite realizar operaciones CRUD sobre una entidad específica.
      * @param entityClass La clase de la entidad para la que se desea obtener el DAO.
-     * @return Un objeto {@link SimpleCrudInterface} para la entidad especificada.
+     * @param <T> El tipo de la entidad.
+     * @return Un objeto DAO para la entidad especificada.
      */
     @SuppressWarnings("unchecked")
     public <T extends Entity> AbstractCrud<T> getDao(Class<T> entityClass) {
         try {
-            return (AbstractCrud<T>) crudClass.getConstructor(DataSource.class, Class.class, Map.class, Class.class, Class.class)
-                    .newInstance(ds, entityClass, mappers, sqlQueryClass, loaderClass);
+            return (AbstractCrud<T>) daoProvider.getCrudClass().getConstructor(DataSource.class, Class.class, Map.class, Class.class, Class.class)
+                    .newInstance(ds, entityClass, mappers, daoProvider.getSqlQueryClass(), loaderClass);
         } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(String.format("Error al crear la instancia de %s", crudClass.getSimpleName()), e);
+            throw new RuntimeException(String.format("Error al crear la instancia de %s", daoProvider.getCrudClass().getSimpleName()), e);
         }
     }
 
@@ -121,7 +141,7 @@ public class DaoFactory {
             try {
                 conn.setAutoCommit(false);
                 logger.debug("Se abre transacción");
-                operations.accept(new TransactionContext(conn, crudClass, sqlQueryClass, loaderClass, mappers));
+                operations.accept(new TransactionContext(conn, daoProvider, loaderClass, mappers));
                 conn.commit();
             } catch (DataAccessException | SQLException e) {
                 try {

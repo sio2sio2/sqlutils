@@ -23,6 +23,11 @@ public class SqlTypesTranslator {
      */
     private Object value;
 
+    /**
+     * Constructor
+     * @param type La clase Java correspondiente al tipo de dato SQL.
+     * @param value El valor del dato SQL.
+     */
     public SqlTypesTranslator(Class<?> type, Object value) {
         this.type = getSqlType(type);
         setSqlValue(value);

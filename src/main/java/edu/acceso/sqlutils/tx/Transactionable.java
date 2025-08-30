@@ -9,5 +9,10 @@ import edu.acceso.sqlutils.errors.DataAccessException;
  */
 @FunctionalInterface
 public interface Transactionable {
+    /**
+     * Ejecuta la operación en el contexto de una transacción.
+     * @param conn La conexión a la base de datos.
+     * @throws DataAccessException Si ocurre un error al acceder a los datos.
+     */
     void run(Connection conn) throws DataAccessException;
 }

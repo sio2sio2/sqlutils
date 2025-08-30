@@ -15,8 +15,8 @@ import org.slf4j.LoggerFactory;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
-import edu.acceso.sqlutils.dao.query.SqlQuery;
-import edu.acceso.sqlutils.dao.query.SqlQueryFactory;
+import edu.acceso.sqlutils.dao.crud.SqlQueryFactory;
+import edu.acceso.sqlutils.dao.crud.simple.SimpleSqlQuery;
 
 /**
  * Contiene la configuración del programa. Para asegurarnos de su unicidad
@@ -48,7 +48,7 @@ public class Config {
      */
     private String url;
 
-    private Class<? extends SqlQuery> sqlQueryClass;
+    private Class<? extends SimpleSqlQuery> sqlQueryClass;
 
     /**
      * Nivel de log.
@@ -219,7 +219,7 @@ public class Config {
      * Getter de sqlQueryClass 
      * @return El valor de sqlQueryClass
      */
-    public Class<? extends SqlQuery> getSqlQueryClass() {
+    public Class<? extends SimpleSqlQuery> getSqlQueryClass() {
         return sqlQueryClass;
     }
 }

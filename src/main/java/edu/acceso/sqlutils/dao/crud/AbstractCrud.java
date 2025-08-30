@@ -10,7 +10,6 @@ import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.crud.MinimalCrudInterface;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.mapper.SqlTypesTranslator;
-import edu.acceso.sqlutils.dao.query.SqlQuery;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
 
 /** 
@@ -28,7 +27,7 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
     /** DAO que proporciona acceso a datos relacionados. */
     protected final ConnProvider cp;
     /** Clase que implementa las sentencias SQL para las operaciones CRUD. */
-    protected final SqlQuery sqlQuery;
+    protected final MinimalSqlQuery sqlQuery;
     /**
      * Mapper de la entidad T que mapea registros de la base de datos a objetos de tipo T.
      * Este mapper es responsable de convertir filas de ResultSet en instancias de T y viceversa.
@@ -45,14 +44,16 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
     protected final RelationLoader loader;
 
     /**
-     * Constructor que recibe un {@link DataSource} y una clase que implementa {@link SqlQuery}.
+     * Constructor que recibe un {@link DataSource} y una clase que implementa {@link MinimalSqlQuery}.
      * @param ds Una fuente de datos para obtener conexiones a la base de datos.
-     * @param mapper El EntityMapper que mapea entidades a registros de la base de
-     * @param daoF La fábrica de DAOs que se utilizará para obtener entidades relacionadas.
+     * @param entityClass La clase de la entidad que maneja este CRUD.
+     * @param mappers El EntityMapper que mapea entidades a registros de la base de
+     * @param sqlQueryClass La clase que implementa las consultas SQL.
+     * @param loaderClass La clase que implementa el cargador de relaciones.
      */
     @SuppressWarnings("unchecked")
     public AbstractCrud(DataSource ds, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
-                        Class<? extends SqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
+                        Class<? extends MinimalSqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
         this.cp = new ConnProvider(ds);
         this.mappers = mappers;
         this.mapper = (EntityMapper<T>) mappers.get(entityClass);
@@ -64,14 +65,16 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
     }
 
     /**
-     * Constructor que recibe una {@link Connection} y una clase que implementa {@link SqlQuery}.
+     * Constructor que recibe una {@link Connection} y una clase que implementa {@link MinimalSqlQuery}.
      * @param conn Una conexión a la base de datos.
-     * @param mapper El EntityMapper que mapea entidades a registros de la base de
-     * @param daoF La fábrica de DAOs que se utilizará para obtener entidades relacionadas.
+     * @param entityClass La clase de la entidad que maneja este CRUD.
+     * @param mappers Los EntityMappers que mapean entidades a registros de la base de datos.
+     * @param sqlQueryClass La clase que implementa las consultas SQL.
+     * @param loaderClass La clase que implementa el cargador de relaciones.
      */
     @SuppressWarnings("unchecked")
     public AbstractCrud(Connection conn, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
-                        Class<? extends SqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
+                        Class<? extends MinimalSqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
         this.cp = new ConnProvider(conn);
         this.mappers = mappers;
         this.mapper = (EntityMapper<T>) mappers.get(entityClass);
@@ -125,7 +128,7 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
      * @param sqlQueryClass La clase que implementa SqlQuery.
      * @return Una instancia de SqlQuery.
      */
-    private static SqlQuery createSqlQueryInstance(Class<? extends SqlQuery> sqlQueryClass, EntityMapper<? extends Entity> mapper) {
+    private static <S extends MinimalSqlQuery> S createSqlQueryInstance(Class<S> sqlQueryClass, EntityMapper<? extends Entity> mapper) {
         try {
             return sqlQueryClass.getConstructor(String.class, String.class, String[].class).newInstance(
                 mapper.getTableInfo().tableName(),

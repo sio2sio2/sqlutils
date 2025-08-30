@@ -84,7 +84,7 @@ public class TransactionManager implements AutoCloseable {
 
     /**
      * Realiza un rollback manual.
-     * @throws SQLException
+     * @throws SQLException Si se produce algún error al realizar el rollback.
      */
     public void rollback() throws SQLException {
         if(!committed && !isNested()) conn.rollback();
@@ -106,7 +106,7 @@ public class TransactionManager implements AutoCloseable {
      * </pre>
      * @param conn La conexión a la que pertenece la conexión
      * @param operations La función lambda que define las operaciones de la transacción.
-     * @throws DataAccessException
+     * @throws DataAccessException Si ocurre un error al acceder a los datos.
      */
     public static void transactionSQL(Connection conn, Transactionable operations) throws DataAccessException {
         boolean originalAutoCommit = true;
