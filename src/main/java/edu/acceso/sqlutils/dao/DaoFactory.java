@@ -89,9 +89,9 @@ public class DaoFactory {
          * @param entityMapperClass La clase del objeto {@link EntityMapper} que se va a registrar.
          * @return La propia instancia de {@link DaoFactory} para permitir el encadenamiento de llamadas.
          */
-        public Builder registerMapper(Class<? extends EntityMapper<? extends Entity>> entityMapperClass) {
-            Class<? extends Entity> entityClass = EntityMapper.getEntityType(entityMapperClass);
-            EntityMapper<? extends Entity> mapper = null;
+        public <T extends Entity> Builder registerMapper(Class<? extends EntityMapper<T>> entityMapperClass) {
+            Class<T> entityClass = EntityMapper.getEntityType(entityMapperClass);
+            EntityMapper<T> mapper = null;
             try {
                 mapper = entityMapperClass.getDeclaredConstructor().newInstance();
             } catch (ReflectiveOperationException e) {
