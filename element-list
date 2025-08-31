@@ -1,0 +1,10 @@
+edu.acceso.sqlutils
+edu.acceso.sqlutils.crud
+edu.acceso.sqlutils.dao
+edu.acceso.sqlutils.dao.crud
+edu.acceso.sqlutils.dao.crud.simple
+edu.acceso.sqlutils.dao.mapper
+edu.acceso.sqlutils.dao.relations
+edu.acceso.sqlutils.dao.tx
+edu.acceso.sqlutils.errors
+edu.acceso.sqlutils.tx
