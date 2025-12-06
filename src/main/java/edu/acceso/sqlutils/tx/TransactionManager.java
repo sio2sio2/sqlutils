@@ -3,6 +3,8 @@ package edu.acceso.sqlutils.tx;
 import java.sql.Connection;
 import java.sql.SQLException;
 
+import javax.sql.DataSource;
+
 import edu.acceso.sqlutils.errors.DataAccessException;
 
 /**
@@ -137,6 +139,22 @@ public class TransactionManager implements AutoCloseable {
             catch(SQLException err) {
                 throw new DataAccessException(err);
             }
+        }
+    }
+
+    /**
+     * Como {@link #transactionSQL(Connection, Transactionable)}, pero genera la transacción
+     * a partir de un {@link DataSource}.
+     * @param ds El origen de datos desde el que se obtiene la conexión.
+     * @param operations La función lambda que define las operaciones de la transacción.
+     * @throws DataAccessException Si ocurre un error al acceder a los datos.
+     */
+    public static void transactionSQL(DataSource ds, Transactionable operations) throws DataAccessException {
+        try (Connection conn = ds.getConnection()) {
+            transactionSQL(conn, operations);
+        }
+        catch(SQLException err) {
+            throw new DataAccessException(err);
         }
     }
 }
