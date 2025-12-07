@@ -191,15 +191,6 @@ public class ConnProvider implements AutoCloseable {
     }
 
     /**
-     * Constructor que inicializa el proveedor de conexiones con un {@link ConnectionPool}.
-     * Equivale a inicilizarlo con el {@link DataSource} del pool.
-     * @param cp Pool de conexiones para obtener conexiones.
-     */
-    public ConnProvider(ConnectionPool cp) {
-        this(cp.getDataSource());
-    }
-
-    /**
      * Constructor que inicializa el proveedor de conexiones con una conexión existente.
      * @param conn Conexión existente a utilizar.
      */

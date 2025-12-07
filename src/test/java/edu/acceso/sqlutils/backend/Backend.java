@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.sql.SQLException;
+
+import javax.sql.DataSource;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,16 +33,16 @@ public class Backend {
     /** Fábrica de DAOs para acceder a las entidades del backend */
     private final DaoFactory daoFactory;
     /** Pool de conexiones a la base de datos */
-    private final ConnectionPool cp;
+    private final DataSource ds;
 
     /**
      * Constructor privado para inicializar el backend con un pool de conexiones y una fábrica de DAOs.
      * @param cp Pool de conexiones a la base de datos.
      * @param daoFactory Fábrica de DAOs para acceder a las entidades del backend.
      */
-    private Backend(ConnectionPool cp, DaoFactory daoFactory) {
+    private Backend(DataSource ds, DaoFactory daoFactory) {
         this.daoFactory = daoFactory;
-        this.cp = cp;
+        this.ds = ds;
     }
 
     /**
@@ -49,16 +52,16 @@ public class Backend {
      */
     public static DaoFactory createDaoFactory() throws DataAccessException {
         Config config = Config.getInstance();
-        ConnectionPool cp = ConnectionPool.getInstance(config.getUrl(), config.getUser(), config.getPassword());
+        DataSource ds = ConnectionPool.getInstance(config.getUrl(), config.getUser(), config.getPassword());
 
         DaoProvider daoProvider = new DaoProvider(SimpleListCrud.class, config.getSqlQueryClass());
 
         DaoFactory daoFactory = DaoFactory.Builder.create(daoProvider)
             .registerMapper(CentroMapper.class)
             .registerMapper(EstudianteMapper.class)
-            .get(cp.getDataSource(), LoaderFactory.LAZY);
+            .get(ds, LoaderFactory.LAZY);
 
-        return new Backend(cp, daoFactory).inicializar();
+        return new Backend(ds, daoFactory).inicializar();
     }
 
     /**
@@ -77,7 +80,7 @@ public class Backend {
             Config config = Config.getInstance();
 
             try (InputStream st = Files.newInputStream(config.getInput())) {
-                SqlUtils.executeSQL(cp.getConnection(), st);
+                SqlUtils.executeSQL(ds.getConnection(), st);
                 logger.info("Base de datos inicializada correctamente.");
             } catch (IOException | SQLException err) {
                 logger.error("Error al inicializar la base de datos", err);
