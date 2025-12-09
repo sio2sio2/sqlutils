@@ -1,9 +1,15 @@
 package edu.acceso.sqlutils;
 
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
+import javax.sql.DataSource;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -104,5 +110,52 @@ public class ConnectionPool {
     public static void reset() {
         instances.values().forEach(HikariDataSource::close);
         instances.clear();
+    }
+
+    /**
+     * Verifica si la base de datos ya ha sido inicializada.
+     * @param conn Una conexión a la base de datos.
+     * @return true si la base de datos tiene al menos una tabla de usuario, false en caso contrario.
+     * @throws SQLException Si ocurre un error al acceder a los metadatos de la base de datos.
+     */
+    public static boolean isDatabaseInitialized(Connection conn) throws SQLException {
+        DatabaseMetaData metaData = conn.getMetaData();
+        String dbName = metaData.getDatabaseProductName().toLowerCase();
+        
+        try (ResultSet tables = metaData.getTables(null, null, "%", new String[]{"TABLE"})) {
+            while (tables.next()) {
+                String tableName = tables.getString("TABLE_NAME");
+                
+                // Filtrar tablas del sistema según el SGBD
+                if (!isSystemTable(dbName, tableName)) {
+                    return true; // Encontramos al menos una tabla de usuario
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Verifica si la base de datos ya ha sido inicializada.
+     * @param dataSource La fuente de datos HikariCP.
+     * @return true si la base de datos tiene al menos una tabla de usuario, false en caso contrario.
+     * @throws SQLException Si ocurre un error al acceder a los metadatos de la base de datos.
+     */
+    public static boolean isDatabaseInitialized(DataSource dataSource) throws SQLException {
+        try(Connection conn = dataSource.getConnection()) {
+            return isDatabaseInitialized(conn);
+        }
+    }
+
+    private static boolean isSystemTable(String dbProduct, String tableName) {
+        tableName = tableName.toLowerCase();
+        
+        if (dbProduct.contains("hsql") || dbProduct.contains("h2")) {
+            return tableName.startsWith("information_schema.") || 
+                tableName.startsWith("system_");
+        } else if (dbProduct.contains("derby")) {
+            return tableName.startsWith("sys");
+        }
+        return false;
     }
 }
