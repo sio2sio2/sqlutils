@@ -10,11 +10,17 @@
         },
         {
             "type": "java",
-            "name": "sqlutils (ejecución normal)",
+            "name": "sqlutils (sqlite)",
             "request": "launch",
             "mainClass": "${config:miapp.package}.Test",
-            //"args": ["-i", "esquema.sql", "-vv", "-u", "sqlite:caca.db"]
-            "args": ["-i", "esquema.sql", "-vv", "-u", "sqlite:file::memory:?cache=shared"]
+            "args": ["-i", ":resource:/esquema.sql", "-vv", "-B", "sqlite"]
+        },
+        {
+            "type": "java",
+            "name": "sqlutils (mariadb)",
+            "request": "launch",
+            "mainClass": "${config:miapp.package}.Test",
+            "args": ["-i", ":resource:/esquema.sql", "-vv", "-B", "mariadb", "-b", "centros", "-u", "usuario", "-p", "usuario"]
         },
         {
             "type": "java",

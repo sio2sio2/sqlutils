@@ -1,5 +1,6 @@
 package edu.acceso.sqlutils;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -9,52 +10,42 @@ import org.slf4j.LoggerFactory;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
-import edu.acceso.sqlutils.backend.Backend;
-import edu.acceso.sqlutils.dao.DaoFactory;
-import edu.acceso.sqlutils.dao.crud.SqlQueryFactory;
-import edu.acceso.sqlutils.dao.crud.simple.SimpleListCrud;
-import edu.acceso.sqlutils.dao.crud.simple.SimpleSqlQueryGeneric;
+import edu.acceso.sqlutils.backend.Conexion;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.modelo.Centro;
 import edu.acceso.sqlutils.modelo.Estudiante;
 
 public class Test {
+    private static Logger logger = (Logger) LoggerFactory.getLogger(Test.class);
     private static final DateTimeFormatter df = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     @SuppressWarnings("unused")
     public static void main(String[] args) {
-        // Juego de instancias SqlQuery para definir las consultas SQL.
-         SqlQueryFactory sqlQueryFactory = SqlQueryFactory.Builder.create("centro")
-                // Ejemplo de cómo registrar las consultas para SQLite.
-                .register("sqlite", SimpleSqlQueryGeneric.class)
-                // Para todos los demás SGBD, se utiliza la misma, de modo
-                // que el registro específico para SQLite sobraba, pero ha servido
-                // para ilustrar cómo se hace.
-                .register("*", SimpleSqlQueryGeneric.class)
-                .get();
-
         Config config = Config.create(args);
-
-        Logger logger = (Logger) LoggerFactory.getLogger(Test.class);
 
         // De estas librerías externas no queremos mensajes de depuración.
         Logger reflectionLogger = (Logger) LoggerFactory.getLogger("org.reflections");
         Logger hikariLogger = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
         reflectionLogger.setLevel(Level.WARN);
         hikariLogger.setLevel(Level.WARN);
+
         logger.debug("Nivel de los registros de org.reflections establecido a {}", reflectionLogger.getLevel());
 
-        DaoFactory daoFactory;
+        Conexion conexion;
         try {
-            daoFactory = Backend.createDaoFactory();
+            conexion = Conexion.create();
         } catch (DataAccessException e) {
-            System.err.println("Error al inicializar el backend: " + e.getMessage());
+            logger.error("Error de conexión a la base de datos.", e);
+            System.exit(1);
+            throw new RuntimeException("Esto sólo sirve para que el compilador no se queje");
+        } catch(IOException e) {
+            logger.error("No se puede abrir el guion que inicializa la base de datos", e);
             System.exit(1);
             throw new RuntimeException("Esto sólo sirve para que el compilador no se queje");
         }
 
-        SimpleListCrud<Centro> centroDao = (SimpleListCrud<Centro>) daoFactory.getDao(Centro.class);
-        SimpleListCrud<Estudiante> estudianteDao = (SimpleListCrud<Estudiante>) daoFactory.getDao(Estudiante.class);
+        var centroDao = conexion.getDao(Centro.class);
+        var estudianteDao = conexion.getDao(Estudiante.class);
 
         Centro castillo = null;
         try {
@@ -99,8 +90,7 @@ public class Test {
 
         // Ejemplo de transacción: intentamos actualizar ambos estudiantes.
         try {
-            daoFactory.transaction(tx -> {
-                SimpleListCrud<Estudiante> eDao = (SimpleListCrud<Estudiante>) tx.getDao(Estudiante.class);
+            conexion.transaction((cDao, eDao) -> {
                 Estudiante e1 = eDao.get(1L).orElse(null);
                 Estudiante e2 = eDao.get(3L).orElse(null); // No existe.
 
@@ -112,7 +102,7 @@ public class Test {
             });
         }
         catch(Exception err) {
-            System.err.printf("No se actualizan los dos estudiantes: %s\n", err.getMessage());
+            System.err.printf("No se actualizan nombres de estudiantes: %s\n", err.getMessage());
         }
 
         // Comprobación de que ningún estudiante se actualizó

@@ -1,27 +1,31 @@
 package edu.acceso.sqlutils;
 
-import java.net.URISyntaxException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.lang.Runtime.Version;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Properties;
 
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
 import org.slf4j.LoggerFactory;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
-import edu.acceso.sqlutils.dao.crud.SqlQueryFactory;
-import edu.acceso.sqlutils.dao.crud.simple.SimpleSqlQuery;
+
+import picocli.CommandLine;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.ITypeConverter;
+import picocli.CommandLine.IVersionProvider;
+import picocli.CommandLine.Model.CommandSpec;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.ParameterException;
 
 /**
  * Contiene la configuración del programa. Para asegurarnos de su unicidad
  * se usa el patrón Singleton.
  */
+@Command
 public class Config {
     private static final Logger logger = (Logger) LoggerFactory.getLogger(Config.class);
 
@@ -30,118 +34,144 @@ public class Config {
      */
     private static Config instance;
 
-    /** Backend por defecto. */
-    private static final String DEFAULT_URL = "sqlite:file::memory:?cache=shared";
+    /** Base de datos predeterminada */
+    private static final String DEFAULT_DATABASE = "file::memory:?cache=shared";
+    /** SGBD predeterminado */
+    private static final String DEFAULT_DBMS = "sqlite";
+
+    private static final String DEFAULT_INPUT = ":resource:/esquema.sql"; // null es la entrada estándar.
+
+   /**
+     * Ruta del guión SQL de entrada. null implica que se usará la entrada estándar.
+     */
+    @Option(names = {"-i", "--input"}, description = "Guíón SQL que construye la base de datos.", converter = ArchivoWrapperConverter.class)
+    private ArchivoWrapper input;
+
+    /** Prefijo para determinar el SGBD. */
+    @Option(names = {"-B", "--sgbd"}, description = "Sistema de gestión de bases de datos (SGBD).", converter = DbmsSelectorConverter.class)
+    private DbmsSelector sgbd;
 
     /**
-     * Ruta del archivo de entrada. null implica que se usará la entrada estándar.
+     * Nombre de la base de datos.
      */
-    private Path input;
+    @Option(names = {"-b", "--database"}, description = "Nombre o ruta de la base de datos.")
+    private String db;
 
-    /**
-     * Interfaz de usuario.
-     */
-    private String ui;
+    /** Host de la base de datos. */
+    @Option(names = {"-H", "--host"}, description = "Host de la base de datos.")
+    private String host;
 
-    /**
-     * URL de conexión al backend.
-     */
-    private String url;
+    /** Puerto de la base de datos. */
+    @Option(names = {"-p", "--port"}, description = "Puerto de la base de datos.")
+    private Integer port;
 
-    private Class<? extends SimpleSqlQuery> sqlQueryClass;
+    @Option(names = {"-s", "--silent"}, 
+            description = "Modo silencioso, sólo muestra errores. Incompatible con -v")
+    private boolean silent = false;
 
-    /**
-     * Nivel de log.
-     */
-    private Level logLevel = Level.WARN;
+    @Option(names = {"-v", "--verbose"}, description = "Incrementa la locuacidad de los registros con cada repetición del argumento. Incompatible con -s")
+    private boolean[] verbosity;
 
     /** Usuario de conexión. */
+    @Option(names = {"-u", "--user"}, description = "Usuario de conexión.")
     private String user;
 
     /** Contraseña de conexión. */
+    @Option(names = {"-P", "--password"}, description = "Contraseña de conexión.")
     private String password;
 
+    private Properties properties;
+
     /**
-     * Constructor privado para evitar su instanciación.
-     * @param args Argumentos de la línea de órdenes.
+     * Proveedor de la información de versión.
      */
-    @SuppressWarnings("null")
-    private Config(String[] args) {
-        Options options = new Options();
-        options.addOption("h", "help", false, "Mostrar ayuda.");
-        options.addOption("i", "input", true, "SQL de entrada.");
-        options.addOption("u", "url", true, "URL de conexión sin 'jdbc:'. Por defecto, base de datos en memoria SQLite.");
-        options.addOption("U", "user", true, "Usuario de conexión. Por defecto, null.");
-        options.addOption("P", "password", true, "Contraseña de conexión. Por defecto, null.");
-        options.addOption("v", "verbose", false, "Aumenta la verbosidad de los mensajes. Puede repetirse.");
-        options.addOption("q", "quiet", false, "Elimina mensajes de depuración: sólo deja los de error.");
+    private static class VersionProvider implements IVersionProvider {
 
-        CommandLineParser parser = new DefaultParser();
-        CommandLine cmd = null;
-        try {
-            cmd = parser.parse(options, args);
-        } catch (ParseException e) {
-            System.err.println("Error al analizar los argumentos: " + e.getMessage());
-            System.exit(1);
+        private final Properties properties;
+
+        public VersionProvider(Properties properties) {
+            this.properties = properties;
         }
 
-        if(cmd.hasOption("help")) {
-            new HelpFormatter().printHelp(
-                "java -jar tarea_4_1.jar",
-                "Almacena el CSV de profesores en otros formatos",
-                options,
-                "Ejemplo: java -jar tarea_4_1.jar -i pedidos.sql -I console",
-                true
-            );
-            System.exit(0);
-        }
+        @Override
+        public String[] getVersion() throws Exception {
+            String appName = properties.getProperty("app.name", "Sin nombre");
+            String appVersion = properties.getProperty("app.version", "???");
+            String appDescription = properties.getProperty("app.description", "Sin descripción");
 
-        // Nivel de depuración
-        if(cmd.hasOption("verbose")) {
-            int verbosity = (int) Arrays.stream(cmd.getOptions())
-                .filter(o -> o.getLongOpt().equals("verbose")).count();
-            logLevel = switch(verbosity) {
-                case 1 -> Level.INFO;
-                case 2 -> Level.DEBUG;
-                default -> Level.TRACE;
+            Version runtimeVersion = Runtime.version();
+            String osName = System.getProperty("os.name");
+            String osVersion = System.getProperty("os.version");
+            String osArch = System.getProperty("os.arch");
+
+            return new String[] {
+                String.format("%s v%s [JRE v%s. %s v%s (%s)]:", appName, appVersion, runtimeVersion, osName, osVersion, osArch),
+                "   " + appDescription,
             };
         }
-        else if(cmd.hasOption("quiet")) {
-            logLevel = Level.ERROR;
+    }
+
+    /**
+     * Excepción interna para peticiones de ayuda. La usa --sgbd.
+     */
+    private static class HelpRequestException extends Exception {
+        private final HelpType helpType;
+
+        public enum HelpType {
+            SGBD
         }
 
-        Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
-        root.setLevel(logLevel);
-        logger.debug("Nivel de los registros establecido a {}", logLevel);
-
-        String inputFile = cmd.getOptionValue("input");
-        if(inputFile == null) {
-            logger.error("Debe especificarse un archivo de entrada.");
-            System.exit(2);
+        public HelpRequestException(HelpType helpType) {
+            this.helpType = helpType;
         }
-        else {
-            input =Path.of(inputFile);
-            if(!Files.exists(input)) { // Comprobamos si está en resources
-                try {
-                    String iF = input.isAbsolute()?inputFile:"/" + inputFile;
-                    input = Path.of(getClass().getResource(iF).toURI());
-                    logger.debug("Intentamos comprobar si el archivo existe en resources");
+
+        public HelpType getHelpType() {
+            return helpType;
+        }
+
+    }
+
+    private static class ArchivoWrapperConverter implements ITypeConverter<ArchivoWrapper> {
+        @Override
+        public ArchivoWrapper convert(String value) throws Exception {
+            return new ArchivoWrapper(
+                switch(value) {
+                    case null -> DEFAULT_INPUT;
+                    case "-", "stdin" -> null;
+                    default -> value;
                 }
-                catch(NullPointerException e) {
-                    logger.error("{}: archivo inexistente", inputFile);
-                    System.exit(3);
-                }
-                catch(URISyntaxException e) {
-                    logger.error("{}: archivo inválido", inputFile);
-                    System.exit(2);
-                }
+            );
+        }
+    }
+
+    private static class DbmsSelectorConverter implements ITypeConverter<DbmsSelector> {
+        @Override
+        public DbmsSelector convert(String value) throws Exception {
+            if("help".equals(value) || "?".equals(value)) {
+                throw new HelpRequestException(HelpRequestException.HelpType.SGBD);
+            }
+
+            try {
+                return DbmsSelector.fromString(value);
+            } catch(IllegalArgumentException | UnsupportedOperationException e) {
+                throw new IllegalArgumentException(e.getMessage());
             }
         }
+    } 
 
-        url = cmd.getOptionValue("url", DEFAULT_URL);
-        if(!url.startsWith("jdbc:")) url = "jdbc:" + url;
-        sqlQueryClass = SqlQueryFactory.getInstance().createSqlQuery(url);
-        logger.debug("URL de conexión al backend: {}", url);
+    private Config loadProperties(String resource) {
+        properties = new Properties();
+
+        try(
+            InputStream st = getClass().getResourceAsStream(resource);
+            InputStreamReader sr = new InputStreamReader(st, StandardCharsets.UTF_8);
+        ) {
+            if(st != null) properties.load(sr);
+        } catch (IOException e) {
+            logger.warn("No se pudo leer la información de versión.", e);
+        }
+
+        return this;
     }
 
     /**
@@ -152,8 +182,57 @@ public class Config {
      *  y la configuración ya está creada.
      */
     public static Config create(String[] args) {
-        if(instance == null) instance = new Config(args);
-        else throw new IllegalStateException("La configuración ya fue creada");
+        if (instance != null) {
+            throw new IllegalStateException("La configuración ya fue creada");
+        }
+
+        instance = new Config().loadProperties("/app.properties");
+
+        CommandSpec spec = CommandSpec.forAnnotatedObject(instance)
+            .name("java -jar sqlutils.jar")
+            .mixinStandardHelpOptions(true)
+            .versionProvider(new VersionProvider(instance.properties));
+        spec.usageMessage().description(instance.properties.getProperty("app.description", "Sin descripción "));
+
+        CommandLine cmd = new CommandLine(spec);
+
+        try {
+            cmd.parseArgs(args);
+
+            if (cmd.isUsageHelpRequested()) {
+                cmd.usage(System.out);
+                System.exit(0);
+            }
+
+            if (cmd.isVersionHelpRequested()) {
+                cmd.printVersionHelp(System.out);
+                System.exit(0);
+            }
+
+            // Validaciones y reasignaciones de valor adicionales
+            instance.validate();
+
+        } catch(ParameterException e) {
+            if(e.getCause() instanceof HelpRequestException hre) {
+                switch(hre.getHelpType()) {
+                    case SGBD:
+                        System.out.println("Sistemas de gestión de bases de datos disponibles:");
+                        Arrays.stream(DbmsSelector.values()).forEach(s -> System.out.println(" - " + s.name()));
+                        break;
+                    default:
+                        assert false : "Tipo de ayuda desconocido.";
+                }
+                System.exit(0);
+            }
+            else if(e.getCause() instanceof IllegalArgumentException xe) {
+                logger.error(xe.getMessage());
+                System.exit(1);
+            }
+
+            logger.error("Error en parámetros: {}", e.getMessage());
+            cmd.usage(System.err);
+            System.exit(2);
+        }
 
         return instance;
     }
@@ -167,36 +246,65 @@ public class Config {
         return instance;
     }
 
+   private void validate() {
+        // Validar silent/verbose
+        if(silent && verbosity != null && verbosity.length > 0) {
+            throw new CommandLine.ParameterException(new CommandLine(this), "Los parámetros -s y -v son incompatibles");
+        }
+
+        logger.setLevel(getLogLevel());
+
+        if(input == null) {
+            try {
+                input = new ArchivoWrapperConverter().convert(null);
+                logger.debug("Se usará el guion SQL por defecto: {}", DEFAULT_INPUT);
+            } catch (Exception e) {
+                assert false : "No se pudo asignar el valor por defecto a la entrada.";
+            }
+        }
+
+        if(db == null || db.isBlank()) {
+            db = DEFAULT_DATABASE;
+            sgbd = DbmsSelector.fromString(DEFAULT_DBMS);
+            logger.info("No se indicó base de datos. Se usará base y gestor por defecto ({})", sgbd);
+        }
+
+        if(sgbd == null) {
+            sgbd = DbmsSelector.fromString(DEFAULT_DBMS);
+            logger.info("No se indicó SGBD. Se usará el gestor por defecto: {}", sgbd);
+        }
+   }
+
     /** 
      * Getter de input 
      * @return El valor de input
      */
-    public Path getInput() {
+    public ArchivoWrapper getInput() {
         return input;
     }
 
-    /** 
-     * Getter de ui 
-     * @return El valor de ui
-     */
-    public String getUi() {
-        return ui;
-    }
-
-    /** 
-     * Getter de backend 
-     * @return El valor de backend
-     */
-    public String getUrl() {
-        return url;
-    }
-    
-    /** 
-     * Getter de logLevel 
-     * @return El valor de logLevel
+    /**
+     * Obtiene el nivel de log configurado.
+     * @return El nivel de log.
      */
     public Level getLogLevel() {
-        return logLevel;
+        if (silent) return Level.ERROR;
+
+        int verbose = (verbosity == null) ? 0 : verbosity.length;
+        return switch (verbose) {
+            case 0  -> Level.WARN;
+            case 1  -> Level.INFO;
+            case 2  -> Level.DEBUG;
+            default -> Level.TRACE;
+        };
+    }
+
+    /**
+     * Obtiene la URL para la conexión a la base de datos.
+     * @return La URL de conexión.
+     */
+    public String getDbUrl() {
+        return sgbd.getUrl(db, host, port);
     }
 
     /** 
@@ -213,13 +321,5 @@ public class Config {
      */
     public String getPassword() {
         return password;
-    }
-
-    /** 
-     * Getter de sqlQueryClass 
-     * @return El valor de sqlQueryClass
-     */
-    public Class<? extends SimpleSqlQuery> getSqlQueryClass() {
-        return sqlQueryClass;
     }
 }
