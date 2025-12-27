@@ -183,25 +183,29 @@ public class SqlUtils {
 
     /**
      * Ejecuta un guión SQL en la base de datos.
+     * <p>
+     * Si se produce un error, las operaciones se revierten. Desgracidamente,
+     * con MariaDB/MySQL las sentencias DDL (CREATE, DROP, ALTER, etc.) provocan un commit implícito,
+     * por lo que no es posible revertirlas.
      * @param conn Conexión a la base de datos.
      * @param st Flujo de entrada con el guión SQL.
      * @throws SQLException     Si ocurre un error al ejecutar el guión SQL.
      * @throws IOException      Si ocurre un error al leer el flujo de entrada.
      */
     public static void executeSQL(Connection conn, InputStream st) throws SQLException, IOException {
-        conn.setAutoCommit(false);
+        boolean originalAutoCommit = conn.getAutoCommit();
+        conn.setAutoCommit(originalAutoCommit);
 
         try (Statement stmt = conn.createStatement()) {
             for(String sentencia: splitSQL(st)) {
-                stmt.addBatch(sentencia);
+                stmt.execute(sentencia);
             }
-            stmt.executeBatch();
             conn.commit();
         } catch(SQLException err) {
             conn.rollback();
             throw new SQLException(err);
         } finally {
-            conn.setAutoCommit(true);
+            conn.setAutoCommit(originalAutoCommit);
         }
     }
 }
