@@ -120,14 +120,23 @@ public class ConnectionPool {
      */
     public static boolean isDatabaseInitialized(Connection conn) throws SQLException {
         DatabaseMetaData metaData = conn.getMetaData();
-        String dbName = metaData.getDatabaseProductName().toLowerCase();
+
+        // 1. Intentamos obtener catálogo y esquema actuales
+        String catalog = conn.getCatalog();
+        String schema = null;
         
-        try (ResultSet tables = metaData.getTables(null, null, "%", new String[]{"TABLE"})) {
+        try {// getSchema() no existe en versiones muy antiguas de JDBC
+            schema = conn.getSchema(); 
+        } catch (AbstractMethodError | SQLException e) {
+            // Evitamos fallos con versiones obsoletas de JDBC
+        }
+
+        try (ResultSet tables = metaData.getTables(catalog, schema, "%", new String[]{"TABLE"})) {
             while (tables.next()) {
                 String tableName = tables.getString("TABLE_NAME");
                 
                 // Filtrar tablas del sistema según el SGBD
-                if (!isSystemTable(dbName, tableName)) {
+                if (!isGenericSystemTable(tableName)) {
                     return true; // Encontramos al menos una tabla de usuario
                 }
             }
@@ -147,15 +156,21 @@ public class ConnectionPool {
         }
     }
 
-    private static boolean isSystemTable(String dbProduct, String tableName) {
+    /**
+     * Verifica si el nombre de la tabla corresponde a una tabla del sistema genérica.
+     * @param tableName El nombre de la tabla.
+     * @return true si es una tabla del sistema, false en caso contrario.
+     */
+    private static boolean isGenericSystemTable(String tableName) {
         tableName = tableName.toLowerCase();
         
-        if (dbProduct.contains("hsql") || dbProduct.contains("h2")) {
-            return tableName.startsWith("information_schema.") || 
-                tableName.startsWith("system_");
-        } else if (dbProduct.contains("derby")) {
-            return tableName.startsWith("sys");
-        }
-        return false;
+        // Lista de tablas del sistema comunes en varios SGBD
+        return  tableName.startsWith("sys") ||               // Oracle, MSSQL, Derby, DB2, H2
+                tableName.contains("information_schema") ||  // MariaDB, MSSQL, MySQL, SQL Server, H2
+                tableName.startsWith("databasechangelog") || // Liquibase
+                tableName.startsWith("flyway_") ||           // Flyway
+                tableName.startsWith("pg_") ||               // PostgreSQL
+                tableName.startsWith("msrepl") ||            // MSSQL Replication
+                tableName.startsWith("sqlite_");             // SQLite
     }
 }
