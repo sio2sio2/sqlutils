@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils.tx;
+package edu.acceso.sqlutils.tx.functional;
 
 import java.sql.Connection;
 

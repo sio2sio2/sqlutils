@@ -194,7 +194,7 @@ public class SqlUtils {
      */
     public static void executeSQL(Connection conn, InputStream st) throws SQLException, IOException {
         boolean originalAutoCommit = conn.getAutoCommit();
-        conn.setAutoCommit(originalAutoCommit);
+        conn.setAutoCommit(false);
 
         try (Statement stmt = conn.createStatement()) {
             for(String sentencia: splitSQL(st)) {

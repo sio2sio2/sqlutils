@@ -76,6 +76,10 @@ public enum DbmsSelector {
                 .orElse(null);
     }
 
+    /**
+     * Indica si el SGBD tiene driver disponible.
+     * @return true, si así es. 
+     */
     public boolean isSupported() {
         if(supported == null) {
             try {

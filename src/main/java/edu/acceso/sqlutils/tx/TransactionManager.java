@@ -6,6 +6,8 @@ import java.sql.SQLException;
 import javax.sql.DataSource;
 
 import edu.acceso.sqlutils.errors.DataAccessException;
+import edu.acceso.sqlutils.tx.functional.Transactionable;
+import edu.acceso.sqlutils.tx.functional.TransactionableR;
 
 /**
  * Modela un gestor de transacciones que permite definir transacciones
@@ -94,23 +96,26 @@ public class TransactionManager implements AutoCloseable {
     }
 
     /**
-     * Permite definir una transacción mediante un función lambda.
+     * Permite definir una transacción mediante un función lambda que devuelve un resultado.
      * Tanto la confirmación como el desecho de las operaciones es implícito.
      * <pre>
      *     try (Connection conn = DriveManager.getConnection(conn)) {
-     *         transactionSQL(conn, c -> {
+     *         boolean result = transactionSQL(conn, c -> {
      *             // Operaciones que usan la conexión "c".
+     *             return true; // o false, según convenga
      *         });
      *     }
      *     catch(DataAccessException err) {
      *          System.err.println(err.Message());
      *     }
      * </pre>
+     * @param <T> El tipo de dato que devuelve la operación.
      * @param conn La conexión a la que pertenece la conexión
      * @param operations La función lambda que define las operaciones de la transacción.
+     * @return El resultado de la operación.
      * @throws DataAccessException Si ocurre un error al acceder a los datos.
      */
-    public static void transactionSQL(Connection conn, Transactionable operations) throws DataAccessException {
+    public static <T> T transactionSQL(Connection conn, TransactionableR<T> operations) throws DataAccessException {
         boolean originalAutoCommit = true;
         boolean rollback = false;
 
@@ -120,7 +125,7 @@ public class TransactionManager implements AutoCloseable {
             originalAutoCommit = conn.getAutoCommit();
             conn.setAutoCommit(false);
             
-            operations.run(conn);
+            return operations.run(conn);
         }
         catch(DataAccessException | RuntimeException | SQLException err) {
             try {
@@ -140,6 +145,47 @@ public class TransactionManager implements AutoCloseable {
                 throw new DataAccessException(err);
             }
         }
+    }
+
+    /**
+     * Como {@link #transactionSQL(Connection, TransactionableR)}, pero genera la transacción
+     * a partir de un {@link DataSource}.
+     * @param <T> El tipo de dato que devuelve la operación.
+     * @param ds El origen de datos desde el que se obtiene la conexión.
+     * @param operations La función lambda que define las operaciones de la transacción.
+     * @return El resultado de la operación.
+     * @throws DataAccessException Si ocurre un error al acceder a los datos.
+     */
+    public static <T> T transactionSQL(DataSource ds, TransactionableR<T> operations) throws DataAccessException {
+        try (Connection conn = ds.getConnection()) {
+            return transactionSQL(conn, operations);
+        }
+        catch(SQLException err) {
+            throw new DataAccessException(err);
+        }
+    }
+
+    /**
+     * Como {@link #transactionSQL(Connection, TransactionableR)}, pero sin resultado.
+     * <pre>
+     *     try (Connection conn = DriveManager.getConnection(conn)) {
+     *         transactionSQL(conn, c -> {
+     *             // Operaciones que usan la conexión "c".
+     *         });
+     *     }
+     *     catch(DataAccessException err) {
+     *          System.err.println(err.getMessage());
+     *     }
+     * </pre>
+     * @param conn La conexión a la que pertenece la conexión
+     * @param operations La función lambda que define las operaciones de la transacción.
+     * @throws DataAccessException Si ocurre un error al acceder a los datos.
+     */
+    public static void transactionSQL(Connection conn, Transactionable operations) throws DataAccessException {
+        transactionSQL(conn , c -> {
+            operations.run(c);
+            return null;
+        });
     }
 
     /**
