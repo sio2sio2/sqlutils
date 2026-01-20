@@ -8,3 +8,4 @@ edu.acceso.sqlutils.dao.relations
 edu.acceso.sqlutils.dao.tx
 edu.acceso.sqlutils.errors
 edu.acceso.sqlutils.tx
+edu.acceso.sqlutils.tx.functional
