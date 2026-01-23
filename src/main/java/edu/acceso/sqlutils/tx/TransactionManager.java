@@ -278,6 +278,14 @@ public class TransactionManager {
     }
 
     /**
+     * Indica si en el hilo actual la transacción está abierta.
+     * @return `true`, si la transacción está abierta.
+     */
+    public boolean isActive() {
+        return counter.get() > 0;
+    }
+
+    /**
      * Obtiene los nombres de los gestores de transacciones disponibles.
      * @return Los nombres de los gestores de transacciones.
      */
