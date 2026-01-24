@@ -1,9 +1,5 @@
 package edu.acceso.sqlutils.tx;
 
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Map;
@@ -14,6 +10,7 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import edu.acceso.sqlutils.ConnProvider.ConnectionWrapper;
 import edu.acceso.sqlutils.errors.DataAccessException;
 
 /**
@@ -71,59 +68,6 @@ public class TransactionManager {
         void run(Connection conn) throws DataAccessException;
     }
 
-
-    /**
-     * Proxy que envuelve una conexión para evitar que se cierre al invocar el método close().
-     * Es útil para que las conexiones gestionadas por TransactionManager no las
-     * cierre el programdador accidentalmente, sino exclusivamente cuando se confirma
-     * o deshace la transacción.
-     */
-    private static class ConnectionWrapper implements InvocationHandler {
-
-        /** Conexión original que se envuelve. */
-        private final Connection conn;
-
-        /**
-         * Constructor privado que crea un wrapper para una conexión.
-         * @param conn La conexión original a envolver.
-         */
-        private ConnectionWrapper(Connection conn) {
-            this.conn = conn;
-        }
-
-        /**
-         * Crea un proxy de la conexión original que evita que se cierre al invocar close().
-         * @param conn La conexión original a envolver.
-         * @return Un objeto Connection que actúa como proxy de la conexión original.
-         */
-        public static Connection createProxy(Connection conn) {
-            return (Connection) Proxy.newProxyInstance(
-                conn.getClass().getClassLoader(),
-                new Class<?>[]{Connection.class},
-                new ConnectionWrapper(conn)
-            );
-        }
-
-        @Override
-        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            try {
-                return switch(method.getName()) {
-                    // El proxy se considera igual a sí mismo.
-                    case "equals" -> proxy == args[0];
-                    case "hashCode" -> System.identityHashCode(proxy);
-                    // Evitamos cerrar la conexión al invocar close().
-                    case "close" -> null;
-                    // Cualquier otro método de la interfaz Connection
-                    // se delega al objeto Connection original.
-                    default -> method.invoke(conn, args);
-                };
-            }
-            catch(InvocationTargetException e) {
-                throw e.getTargetException();
-            }
-        }
-    }
-
     /** Constructor privado para implementar el patrón Multiton */
     private TransactionManager(DataSource ds) {
         this.ds = ds;
@@ -176,11 +120,22 @@ public class TransactionManager {
     }
 
     /**
+     * Obtiene la conexión asociada a la transacción actual para resultados
+     * que no son flujos (listas, etc.). Se caracteriza porque las sentencias
+     * creadas a partir de esta conexión se pueden cerar manualmente antes del cierre
+     * de la conexión.
+     * @return La conexión asociada a la transacción actual.
+     */
+    public Connection getConnectionForList() {
+        return ConnectionWrapper.createProxy(connectionHolder.get(), false);
+    }
+
+    /**
      * Obtiene la conexión asociada a la transacción actual.
      * @return La conexión asociada a la transacción actual.
      */
     public Connection getConnection() {
-        return ConnectionWrapper.createProxy(connectionHolder.get());
+        return ConnectionWrapper.createProxy(connectionHolder.get(), true);
     }
 
     /**
@@ -190,6 +145,15 @@ public class TransactionManager {
      */
     public static Connection getConnection(String key) {
         return get(key).getConnection();
+    }
+
+    /**
+     * Obtiene la conexión para listas asociada a la transacción del gestor identificado por la clave.
+     * @param key Clave identificativa del gestor.
+     * @return La conexión para listas asociada a la transacción referida por la clave.
+     */
+    public static Connection getConnectionForList(String key) {
+        return get(key).getConnectionForList();
     }
 
     /**

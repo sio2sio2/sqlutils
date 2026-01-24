@@ -58,18 +58,19 @@ public class ConnProvider implements AutoCloseable {
      *  Wrapper para conexiones que evita que se cierren al invocar close().
      *  Utiliza el patrón Proxy de Java para interceptar llamadas a métodos de la interfaz Connection.
      */
-    private static class ConnectionWrapper implements InvocationHandler {
+    public static class ConnectionWrapper implements InvocationHandler {
 
         /** Conexión original que se envuelve. */
         private final Connection conn;
-        private final Set<Statement> statements = Collections.synchronizedSet(new HashSet<>());
+        private Set<Statement> statements;
 
         /**
          * Constructor privado que crea un wrapper para una conexión.
          * @param conn La conexión original a envolver.
          */
-        private ConnectionWrapper(Connection conn) {
+        private ConnectionWrapper(Connection conn, boolean forStream) {
             this.conn = conn;
+            statements = forStream ? Collections.synchronizedSet(new HashSet<>()) : null;
         }
 
         /**
@@ -77,11 +78,11 @@ public class ConnProvider implements AutoCloseable {
          * @param conn La conexión original a envolver.
          * @return Un objeto Connection que actúa como proxy de la conexión original.
          */
-        public static Connection createProxy(Connection conn) {
+        public static Connection createProxy(Connection conn, boolean forStream) {
             return (Connection) Proxy.newProxyInstance(
                 conn.getClass().getClassLoader(),
                 new Class<?>[]{Connection.class},
-                new ConnectionWrapper(conn)
+                new ConnectionWrapper(conn, forStream)
             );
         }
 
@@ -89,34 +90,49 @@ public class ConnProvider implements AutoCloseable {
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             try {
                 switch(method.getName()) {
-                    // Debemos interceptar los métodos que crean sentencias, porque queremos
-                    // apuntarlas al conjunto statements para cerrarlas más tarde.
-                    case "createStatement":
-                        Statement stmt = (Statement) method.invoke(conn, args);
-                        statements.add(stmt);
-                        return StatementWrapper.createProxy(stmt, this, Statement.class);
-                    case "prepareStatement":
-                        PreparedStatement pstmt = (PreparedStatement) method.invoke(conn, args);
-                        statements.add(pstmt);
-                        return StatementWrapper.createProxy(pstmt, this, PreparedStatement.class);
-                    case "prepareCall":
-                        CallableStatement cstmt = (CallableStatement) method.invoke(conn, args);
-                        statements.add(cstmt);
-                        return StatementWrapper.createProxy(cstmt, this, CallableStatement.class);
+                    // El proxy se considera igual a sí mismo.
+                    case "equals":
+                        return proxy == args[0];
+                    case "hashCode":
+                        return System.identityHashCode(proxy);
                     // Evitamos cerrar la conexión al invocar close().
                     case "close":
-                        statements.forEach(statement -> {
-                            try {
-                                statement.close();
-                            } catch (SQLException e) {
-                                logger.error("Error closing statement: " + statement, e);
+                        if(isForStream()) {
+                            // Cerramos todas las sentencias abiertas.
+                            synchronized (statements) {
+                                for (Statement statement : statements) {
+                                    try {
+                                        statement.close();
+                                    } catch (SQLException e) {
+                                        logger.error("Error closing statement: " + statement, e);
+                                    }
+                                }
+                                statements.clear();
                             }
-                        });
+                        }
                         return null;
-                    // Cualquier otro método de la interfaz Connection
-                    // se delega al objeto Connection original.
                     default:
-                            return method.invoke(conn, args);
+                        if(isForStream()) {
+                            // Cualquier otro método de la interfaz Connection
+                            // se delega al objeto Connection original.
+                            switch(method.getName()) {
+                                // Debemos interceptar los métodos que crean sentencias, porque queremos
+                                // apuntarlas al conjunto statements para cerrarlas más tarde.
+                                case "createStatement":
+                                    Statement stmt = (Statement) method.invoke(conn, args);
+                                    statements.add(stmt);
+                                    return StatementWrapper.createProxy(stmt, this, Statement.class);
+                                case "prepareStatement":
+                                    PreparedStatement pstmt = (PreparedStatement) method.invoke(conn, args);
+                                    statements.add(pstmt);
+                                    return StatementWrapper.createProxy(pstmt, this, PreparedStatement.class);
+                                case "prepareCall":
+                                    CallableStatement cstmt = (CallableStatement) method.invoke(conn, args);
+                                    statements.add(cstmt);
+                                    return StatementWrapper.createProxy(cstmt, this, CallableStatement.class);
+                            }
+                        }
+                        return method.invoke(conn, args);
                 }
             }
             catch(InvocationTargetException e) {
@@ -179,6 +195,14 @@ public class ConnProvider implements AutoCloseable {
                 }
             }
         }
+
+        /**
+         * Indica si las conexiones obtenidas con este proveedor están pensadas para usarse con Streams.
+         * @return 
+         */
+        public boolean isForStream() {
+            return statements != null;
+        }
     }
 
     /**
@@ -203,10 +227,14 @@ public class ConnProvider implements AutoCloseable {
      * Obtiene una conexión a la base de datos.
      * Si se construyó con un {@link DataSource}, devuelve una nueva conexión del pool.
      * Si se construyó con una conexión existente, devuelve esa conexión envuelta en un proxy.
+     * @param forStream Indica si las sentencias (Statements) creadas a partir de esta conexión
+     *   deben ser cerradas sólo cuando se cierre la conexión, aunque el programador invoque
+     *   su método close(). Es útil cuando los resultados de las operaciones se devuelven como
+     *   flujos (Streams) que pueden seguir abiertos después de cerrar la sentencia.
      * @return Una conexión a la base de datos.
      * @throws DataAccessException Si ocurre un error al obtener la conexión.
      */
-    public Connection getConnection() throws DataAccessException {
+    public Connection getConnection(boolean forStream) throws DataAccessException {
         if(isDataSource()) {
             try {
                 return ds.getConnection();
@@ -214,7 +242,18 @@ public class ConnProvider implements AutoCloseable {
                 throw new DataAccessException(e);
             }
         }
-        else return ConnectionWrapper.createProxy(conn);
+        else return ConnectionWrapper.createProxy(conn, forStream);
+    }
+
+    /**
+     * Obtiene una conexión a la base de datos cuyas sentencias sólo se cierran al cerrar la conexión.
+     * Si se construyó con un {@link DataSource}, devuelve una nueva conexión del pool.
+     * Si se construyó con una conexión existente, devuelve esa conexión envuelta en un proxy.
+     * @return Una conexión a la base de datos.
+     * @throws DataAccessException Si ocurre un error al obtener la conexión.
+     */
+    public Connection getConnection() throws DataAccessException {
+        return getConnection(true);
     }
 
     /**
