@@ -44,12 +44,16 @@ public class TransactionManager {
     private final ThreadLocal<Boolean> originalAutoCommit;
 
     /** Instancias de gestores de transacciones accesibles por clave */
-    private static final Map<String, TransactionManager> instance = new ConcurrentHashMap<>();
+    private static final Map<String, TransactionManager> instances = new ConcurrentHashMap<>();
 
     /**
      * El DataSource asociado a cada gestor de transacciones.
      */
     private final DataSource ds;
+    /**
+     * La clave asociada a la instancia.
+     */
+    private final String key;
 
     /**
      * Interfaz funcional para operaciones de transacción que devuelven un valor.
@@ -69,7 +73,8 @@ public class TransactionManager {
     }
 
     /** Constructor privado para implementar el patrón Multiton */
-    private TransactionManager(DataSource ds) {
+    private TransactionManager(String key, DataSource ds) {
+        this.key = key;
         this.ds = ds;
         connectionHolder = new ThreadLocal<>();
         counter = ThreadLocal.withInitial(() -> 0);
@@ -84,8 +89,8 @@ public class TransactionManager {
      * @throws IllegalStateException Si el gestor ya ha sido inicializado.
      */
     public static TransactionManager create(String key, DataSource ds) {
-        TransactionManager tm = new TransactionManager(ds);
-        if(instance.putIfAbsent(key, tm) != null) throw new IllegalStateException("TransactionManager ya ha sido inicializado.");
+        TransactionManager tm = new TransactionManager(key, ds);
+        if(instances.putIfAbsent(key, tm) != null) throw new IllegalStateException("TransactionManager ya ha sido inicializado.");
 
         return tm;
     }
@@ -96,7 +101,7 @@ public class TransactionManager {
      * @return El gestor de transacciones asociado a la clave.
      */
     public static TransactionManager get(String key) {
-        TransactionManager tm = instance.get(key);
+        TransactionManager tm = instances.get(key);
         if(tm == null) throw new IllegalStateException("El gestor de transacciones '%s' no ha sido inicializado. Llame a create() primero.".formatted(key));
         return tm;
     }
@@ -250,10 +255,18 @@ public class TransactionManager {
     }
 
     /**
+     * Devuelve la clave asociada a la instancia.
+     * @return La clave asociada a la instancia.
+     */
+    public String getKey() {
+        return key;
+    }
+
+    /**
      * Obtiene los nombres de los gestores de transacciones disponibles.
      * @return Los nombres de los gestores de transacciones.
      */
-    public static String[] getNames() {
-        return instance.keySet().toArray(new String[0]);
+    public static String[] getKeys() {
+        return instances.keySet().toArray(new String[0]);
     }
 }

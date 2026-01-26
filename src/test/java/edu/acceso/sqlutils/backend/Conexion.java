@@ -5,8 +5,6 @@ import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.SQLException;
 
-import javax.sql.DataSource;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,7 +40,7 @@ public class Conexion {
     /** Fábrica de DAOs para acceder a las entidades del backend */
     private final DaoFactory daoFactory;
     /** Pool de conexiones a la base de datos */
-    private final DataSource ds;
+    private final ConnectionPool cp;
 
     /** Interfaz funcional para ejecutar transacciones con DAOs de Centro y Estudiante */
     @FunctionalInterface
@@ -55,9 +53,9 @@ public class Conexion {
      * @param ds Pool de conexiones a la base de datos.
      * @param daoFactory Fábrica de DAOs para acceder a las entidades del backend.
      */
-    private Conexion(DataSource ds, DaoFactory daoFactory) {
+    private Conexion(ConnectionPool cp, DaoFactory daoFactory) {
         this.daoFactory = daoFactory;
-        this.ds = ds;
+        this.cp = cp;
     }
 
     /**
@@ -69,7 +67,7 @@ public class Conexion {
         if(instance != null) throw new IllegalStateException("La conexión ya se inicializó");
 
         Config config = Config.getInstance();
-        DataSource ds = ConnectionPool.getInstance(config.getDbUrl(), config.getUser(), config.getPassword());
+        ConnectionPool cp = ConnectionPool.create("DB", config.getDbUrl(), config.getUser(), config.getPassword());
 
         // Se configura cuáles son las sentencias SQL para las operaciones CRUD.
         SqlQueryFactory sqlQueryFactory = SqlQueryFactory.Builder.create("centros")
@@ -89,9 +87,9 @@ public class Conexion {
         DaoFactory daoFactory = DaoFactory.Builder.create(daoProvider)
             .registerMapper(CentroMapper.class)
             .registerMapper(EstudianteMapper.class)
-            .get(ds, LoaderFactory.LAZY);
+            .get(cp.getDataSource(), LoaderFactory.LAZY);
 
-        instance = new Conexion(ds, daoFactory)
+        instance = new Conexion(cp, daoFactory)
             .inicializar(config.getInput());
 
         return instance;
@@ -107,12 +105,12 @@ public class Conexion {
     }
 
     private Conexion inicializar(ArchivoWrapper guion) throws IOException, DataAccessException {
-        try(InputStream st = guion.openStream();
-            Connection conn = ds.getConnection();
-        ) {
-            if(!ConnectionPool.isDatabaseInitialized(conn)) {
-                SqlUtils.executeSQL(conn, st);
-                logger.info("Base de datos inicializada correctamente.");
+        try(InputStream st = guion.openStream()) {
+            if(!cp.isDatabaseInitialized()) {
+                try(Connection conn = cp.getDataSource().getConnection()) {
+                    SqlUtils.executeSQL(conn, st);
+                    logger.info("Base de datos inicializada correctamente.");
+                }
             }
         } catch(SQLException e) {
             throw new DataAccessException("Imposible conectar a la base de datos", e);
