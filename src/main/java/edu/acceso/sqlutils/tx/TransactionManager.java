@@ -10,7 +10,7 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import edu.acceso.sqlutils.ConnProvider.ConnectionWrapper;
+import edu.acceso.sqlutils.ConnectionWrapper;
 import edu.acceso.sqlutils.errors.DataAccessException;
 
 /**
@@ -132,6 +132,7 @@ public class TransactionManager {
      * @return La conexión asociada a la transacción actual.
      */
     public Connection getConnectionForList() {
+        if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para disponer de una conexión");
         return ConnectionWrapper.createProxy(connectionHolder.get(), false);
     }
 
@@ -140,6 +141,7 @@ public class TransactionManager {
      * @return La conexión asociada a la transacción actual.
      */
     public Connection getConnection() {
+        if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para disponer de una conexión");
         return ConnectionWrapper.createProxy(connectionHolder.get(), true);
     }
 

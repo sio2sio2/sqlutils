@@ -25,6 +25,7 @@ import edu.acceso.sqlutils.dao.relations.LoaderFactory;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.modelo.Centro;
 import edu.acceso.sqlutils.modelo.Estudiante;
+import edu.acceso.sqlutils.tx.TransactionManager;
 
 
 /**
@@ -34,6 +35,8 @@ import edu.acceso.sqlutils.modelo.Estudiante;
 public class Conexion {
     private static Logger logger = LoggerFactory.getLogger(Conexion.class);
 
+    private static final String DB_KEY = "DB";
+
     /** Instancia única de la clase Conexion (patrón Singleton) */
     private static Conexion instance;
 
@@ -41,21 +44,31 @@ public class Conexion {
     private final DaoFactory daoFactory;
     /** Pool de conexiones a la base de datos */
     private final ConnectionPool cp;
+    /** Gestor de transacciones */
+    private final TransactionManager tm;
 
     /** Interfaz funcional para ejecutar transacciones con DAOs de Centro y Estudiante */
     @FunctionalInterface
     public static interface TransactionInterface {
-        public void run(SimpleListCrud<Centro> centroDao, SimpleListCrud<Estudiante> estudianteDao) throws DataAccessException;
+        public void run() throws DataAccessException;
+    }
+
+    /** Interfaz funcional para ejecutar transacciones que devuelven resultado con DAOs de Centro y Estudiante */
+    @FunctionalInterface
+    public static interface TransactionInterfaceR<T> {
+        public T run() throws DataAccessException;
     }
 
     /**
      * Constructor privado para inicializar el backend con un pool de conexiones y una fábrica de DAOs.
+     * @Param key Clave que identifica la fuente de datos.
      * @param ds Pool de conexiones a la base de datos.
      * @param daoFactory Fábrica de DAOs para acceder a las entidades del backend.
      */
-    private Conexion(ConnectionPool cp, DaoFactory daoFactory) {
+    private Conexion(String key, ConnectionPool cp, DaoFactory daoFactory) {
         this.daoFactory = daoFactory;
         this.cp = cp;
+        this.tm = TransactionManager.create(key, cp.getDataSource());
     }
 
     /**
@@ -67,7 +80,7 @@ public class Conexion {
         if(instance != null) throw new IllegalStateException("La conexión ya se inicializó");
 
         Config config = Config.getInstance();
-        ConnectionPool cp = ConnectionPool.create("DB", config.getDbUrl(), config.getUser(), config.getPassword());
+        ConnectionPool cp = ConnectionPool.create(DB_KEY, config.getDbUrl(), config.getUser(), config.getPassword());
 
         // Se configura cuáles son las sentencias SQL para las operaciones CRUD.
         SqlQueryFactory sqlQueryFactory = SqlQueryFactory.Builder.create("centros")
@@ -87,9 +100,9 @@ public class Conexion {
         DaoFactory daoFactory = DaoFactory.Builder.create(daoProvider)
             .registerMapper(CentroMapper.class)
             .registerMapper(EstudianteMapper.class)
-            .get(cp.getDataSource(), LoaderFactory.LAZY);
+            .get(DB_KEY, LoaderFactory.LAZY);
 
-        instance = new Conexion(cp, daoFactory)
+        instance = new Conexion(DB_KEY, cp, daoFactory)
             .inicializar(config.getInput());
 
         return instance;
@@ -135,17 +148,20 @@ public class Conexion {
     }
 
     /**
-     * Ejecuta una transacción con múltiples DAO.
-     * @param ti Interfaz funcional con el código de la transacción.
+     * Ejecuta una transacción que devuelve resultados con múltiples DAO.
+     * @param operations Código con las operaciones que constituyen la transacción.
      * @throws DataAccessException Si hay un error durante la transacción.
      */
-    public void transaction(TransactionInterface ti) throws DataAccessException {
-        daoFactory.transaction(tx -> {
-            SimpleListCrud<Centro> cDao = (SimpleListCrud<Centro>) tx.getDao(Centro.class);
-            SimpleListCrud<Estudiante> eDao = (SimpleListCrud<Estudiante>) tx.getDao(Estudiante.class);
-
-            ti.run(cDao, eDao);
-        });
+    public <T> T transactionR(TransactionInterfaceR<T> operations) throws DataAccessException {
+        return tm.transaction(conn -> { return operations.run(); });
     }
 
+    /**
+     * Ejecuta una transacción con múltiples DAO.
+     * @param operations Código con las operaciones
+     * @throws DataAccessException Si hay un error durante la transacción.
+     */
+    public void transaction(TransactionInterface operations) throws DataAccessException {
+        tm.transaction(conn -> { operations.run(); });
+    }
 }

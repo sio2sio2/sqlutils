@@ -1,11 +1,7 @@
 package edu.acceso.sqlutils.dao;
 
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
-
-import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,9 +13,6 @@ import edu.acceso.sqlutils.dao.crud.simple.SimpleCrudInterface;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.relations.LoaderFactory;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
-import edu.acceso.sqlutils.dao.tx.TransactionContext;
-import edu.acceso.sqlutils.dao.tx.TransactionalOperation;
-import edu.acceso.sqlutils.errors.DataAccessException;
 
 /** 
  * Fábrica de DAOs que permite crear objetos DAO para realizar operaciones CRUD
@@ -33,8 +26,8 @@ public class DaoFactory {
 
     /** Mapa que relaciona las clases de entidad con sus mappers. */
     private final Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers;
-    /** Fuente de datos utilizada para obtener conexiones a la base de datos. */
-    private final DataSource ds;
+    /** Clave que identifica la fuente de datos. */
+    private final String key;
     /** Proveedor de DAOs (que proporciona una implementación de las operaciones CRUD y una definición de las consultas SQL) */
     private final DaoProvider daoProvider;
     /** Clase que implementa el cargador de relaciones. */
@@ -42,13 +35,13 @@ public class DaoFactory {
 
     /**
      * Constructor privado para la fábrica de DAOs.
-     * @param ds Fuente de datos para obtener conexiones a la base de datos.
+     * @param key Clave que identifica la fuente de datos.
      * @param daoProvider Proveedor de DAOs 
      * @param loaderClass Clase que implementa el cargador de relaciones.
      * @param mappers Mapa de mappers de entidades.
      */
-    private DaoFactory(DataSource ds, DaoProvider daoProvider, Class<? extends RelationLoader> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
-        this.ds = ds;
+    private DaoFactory(String key, DaoProvider daoProvider, Class<? extends RelationLoader> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
+        this.key = key;
         this.daoProvider = daoProvider;
         this.loaderClass = loaderClass;
         this.mappers = mappers;
@@ -107,8 +100,8 @@ public class DaoFactory {
          * @param loader Cargador de relaciones.
          * @return Una nueva instancia de {@link DaoFactory}.
          */
-        public DaoFactory get(DataSource ds, LoaderFactory loader) {
-            return new DaoFactory(ds, daoProvider, loader.getLoaderClass(), mappers);
+        public DaoFactory get(String key, LoaderFactory loader) {
+            return new DaoFactory(key, daoProvider, loader.getLoaderClass(), mappers);
         }
     }
 
@@ -121,41 +114,10 @@ public class DaoFactory {
     @SuppressWarnings("unchecked")
     public <T extends Entity> AbstractCrud<T> getDao(Class<T> entityClass) {
         try {
-            return (AbstractCrud<T>) daoProvider.getCrudClass().getConstructor(DataSource.class, Class.class, Map.class, Class.class, Class.class)
-                    .newInstance(ds, entityClass, mappers, daoProvider.getSqlQueryClass(), loaderClass);
+            return (AbstractCrud<T>) daoProvider.getCrudClass().getConstructor(String.class, Class.class, Map.class, Class.class, Class.class)
+                    .newInstance(key, entityClass, mappers, daoProvider.getSqlQueryClass(), loaderClass);
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException(String.format("Error al crear la instancia de %s", daoProvider.getCrudClass().getSimpleName()), e);
-        }
-    }
-
-    /**
-     * Realiza una transacción utilizando un {@link TransactionalOperation} que recibe un {@link DaoFactory}.
-     * Permite ejecutar operaciones de una o varias entidades dentro de una misma transacción.
-     *
-     * @param operations El consumidor que permite definir las operaciones a realizar dentro de la transacción.
-     * @throws DataAccessException Si ocurre un error al realizar la transacción.
-     */
-    public void transaction(TransactionalOperation operations) throws DataAccessException {
-        try {
-            Connection conn = ds.getConnection();
-            try {
-                conn.setAutoCommit(false);
-                logger.debug("Se abre transacción");
-                operations.accept(new TransactionContext(conn, daoProvider, loaderClass, mappers));
-                conn.commit();
-            } catch (DataAccessException | SQLException e) {
-                try {
-                    conn.rollback();
-                } catch (SQLException ex) {
-                    logger.warn("Error al realizar el rollback", ex);
-                }
-                throw new DataAccessException("Error en la transacción", e);
-            } finally {
-                logger.debug("Se cierra transacción");
-                conn.close();
-            }
-        } catch (SQLException e) {
-            throw new DataAccessException("Error al obtener la conexión para la transacción", e);
         }
     }
 }

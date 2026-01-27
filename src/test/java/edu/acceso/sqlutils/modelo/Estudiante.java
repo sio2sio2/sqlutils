@@ -90,7 +90,8 @@ public class Estudiante implements Entity {
     @Override
     public String toString() {
         LocalDate hoy = LocalDate.now();
+        String nombreCentro = getCentro() == null ? "N/A" : getCentro().getNombre();
 
-        return String.format("%s (%d años)", getNombre(), ChronoUnit.YEARS.between(getNacimiento(), hoy));
+        return String.format("%s (%d años, %s)", getNombre(), ChronoUnit.YEARS.between(getNacimiento(), hoy), nombreCentro);
     }
 }

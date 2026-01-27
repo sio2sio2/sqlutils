@@ -8,8 +8,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import javax.sql.DataSource;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,42 +22,22 @@ import edu.acceso.sqlutils.errors.DataAccessException;
 /** 
  * Clase que implementa las operaciones CRUD para una entidad genérica T.
  * @param <T> Tipo de entidad que extiende {@link Entity}.
- * 
- * <p>
- * Puede crearse a partir de una {@link DataSource} o una {@link Connection}.
- * En el primer caso, cada operación CRUD se ejecuta con una conexión nueva del pool.
- * En el segundo, se utiliza una conexión existente y todas las operaciones CRUD la comparten.
- * Esto es útil para transacciones que requieren múltiples operaciones CRUD.
- * </p>
  */
 public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements SimpleCrudInterface<T> {
     /** Logger para registrar información y errores. */
     private static final Logger logger = LoggerFactory.getLogger(SimpleCrud.class);
 
     /**
-     * Constructor que recibe un {@link DataSource} y una clase que implementa {@link SimpleSqlQuery}.
-     * @param ds Una fuente de datos para obtener conexiones a la base de datos.
+     * Constructor que recibe una clave identificativa y una clase que implementa {@link SimpleSqlQuery}.
+     * @param key Clave que identifica la fuente de datos.
      * @param entityClass Clase de la entidad que maneja el DAO.
      * @param mappers Mapa que relaciona las entidades con sus respectivos {@link EntityMapper}.
      * @param sqlQueryClass Clase que implementa {@link SimpleSqlQuery}.
      * @param loaderClass Clase que implementa {@link RelationLoader}.
      */
-    public SimpleCrud(DataSource ds, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
+    public SimpleCrud(String key, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
                       Class<? extends SimpleSqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
-        super(ds, entityClass, mappers, sqlQueryClass, loaderClass);
-    }
-
-    /**
-     * Constructor que recibe una {@link Connection} y una clase que implementa {@link SimpleSqlQuery}.
-     * @param conn Una conexión a la base de datos.
-     * @param entityClass Clase de la entidad que maneja el DAO.
-     * @param mappers Mapa que relaciona las entidades con sus respectivos {@link EntityMapper}.
-     * @param sqlQueryClass Clase que implementa {@link SimpleSqlQuery}.
-     * @param loaderClass Clase que implementa {@link RelationLoader}.
-     */
-    public SimpleCrud(Connection conn, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
-                      Class<? extends SimpleSqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
-        super(conn, entityClass, mappers, sqlQueryClass, loaderClass);
+        super(key, entityClass, mappers, sqlQueryClass, loaderClass);
     }
 
     /**
@@ -87,7 +65,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         final String sql = sqlQuery.getSelectIdSql();
 
         try(
-            Connection conn = cp.getConnection();
+            Connection conn = tm.getConnection();
             PreparedStatement pstmt = conn.prepareStatement(sql);
         ) {
             pstmt.setLong(1, id);
@@ -107,7 +85,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
 
         try {
             // RECURSOS: no se cierran, porque se espera que lo haga el consumidor del stream.
-            Connection conn = cp.getConnection();
+            Connection conn = tm.getConnection();
             PreparedStatement pstmt = conn.prepareStatement(sql);
             ResultSet rs = pstmt.executeQuery();
 
@@ -131,7 +109,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         value = translator.getSqlValue();
 
         try {
-            Connection conn = cp.getConnection();
+            Connection conn = tm.getConnection();
             PreparedStatement pstmt = conn.prepareStatement(sql);
 
             pstmt.setObject(1, value, translator.getType());
@@ -151,7 +129,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         final String sql = getSqlQuery().getDeleteSql();
 
         try(
-            Connection conn = cp.getConnection();
+            Connection conn = tm.getConnection();
             PreparedStatement pstmt = conn.prepareStatement(sql);
         ) {
             pstmt.setLong(1, id);
@@ -167,7 +145,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         final String sql = getSqlQuery().getInsertSql();
 
         try(
-            Connection conn = cp.getConnection();
+            Connection conn = tm.getConnection();
             PreparedStatement pstmt = conn.prepareStatement(sql);
         ) {
             mapper.EntityToParams(pstmt, entity);
@@ -183,7 +161,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         final String sql = getSqlQuery().getUpdateSql();
 
         try(
-            Connection conn = cp.getConnection();
+            Connection conn = tm.getConnection();
             PreparedStatement pstmt = conn.prepareStatement(sql);
         ) {
             mapper.EntityToParams(pstmt, entity);
@@ -199,7 +177,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         final String sql = getSqlQuery().getUpdateIdSql();
 
         try(
-            Connection conn = cp.getConnection();
+            Connection conn = tm.getConnection();
             PreparedStatement pstmt = conn.prepareStatement(sql);
         ) {
             pstmt.setLong(1, newId);

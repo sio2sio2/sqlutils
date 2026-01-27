@@ -1,11 +1,8 @@
 package edu.acceso.sqlutils.dao.crud.simple;
 
-import java.sql.Connection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
-
-import javax.sql.DataSource;
 
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
@@ -19,30 +16,16 @@ import edu.acceso.sqlutils.errors.DataAccessException;
 public class SimpleListCrud<T extends Entity> extends SimpleCrud<T> {
 
     /**
-     * Constructor que recibe un {@link DataSource} y una clase que implementa {@link SimpleSqlQuery}.
-     * @param ds Una fuente de datos para obtener conexiones a la base de datos.
+     * Constructor que recibe una clave identificativa y una clase que implementa {@link SimpleSqlQuery}.
+     * @param key La clave que identifica la fuente de datos.
      * @param entityClass Clase de la entidad que maneja el DAO.
      * @param mappers Mapa que relaciona las entidades con sus respectivos {@link EntityMapper}.
      * @param sqlQueryClass Clase que implementa {@link SimpleSqlQuery}.
      * @param loaderClass Clase que implementa {@link RelationLoader}.
      */
-    public SimpleListCrud(DataSource ds, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
+    public SimpleListCrud(String key, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
                       Class<? extends SimpleSqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
-        super(ds, entityClass, mappers, sqlQueryClass, loaderClass);
-    }
-
-
-    /**
-     * Constructor que recibe una {@link Connection} y una clase que implementa {@link SimpleSqlQuery}.
-     * @param conn Una conexión a la base de datos.
-     * @param entityClass Clase de la entidad que maneja el DAO.
-     * @param mappers Mapa que relaciona las entidades con sus respectivos {@link EntityMapper}.
-     * @param sqlQueryClass Clase que implementa {@link SimpleSqlQuery}.
-     * @param loaderClass Clase que implementa {@link RelationLoader}.
-     */
-    public SimpleListCrud(Connection conn, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
-                      Class<? extends SimpleSqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
-        super(conn, entityClass, mappers, sqlQueryClass, loaderClass);
+        super(key, entityClass, mappers, sqlQueryClass, loaderClass);
     }
 
     /**

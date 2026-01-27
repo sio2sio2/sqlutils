@@ -49,25 +49,25 @@ public class Test {
 
         Centro castillo = null;
         try {
-            castillo = centroDao.get(11004866L).orElse(null);
+            castillo = conexion.transactionR(() -> centroDao.get(11004866L).orElse(null));
             System.out.println(castillo);
         } catch (DataAccessException e) {
             System.err.println("Error al obtener el centro: " + e.getMessage());
         }
 
-        Estudiante perico = null;;
+        
         try {
             Estudiante[] estudiantes = new Estudiante[] {
                 new Estudiante(1L, "Perico de los palotes", LocalDate.parse("10/12/1994", df), castillo),
                 new Estudiante(2L, "María de la O", LocalDate.parse("23/04/1990", df), castillo)
             };
 
-            estudianteDao.insert(estudiantes);
-
-            perico = estudianteDao.get(1L).orElse(null);
-            System.out.println("-- \nDatos de perico:");
-            System.out.println(perico);
-            System.out.println(perico.getCentro());
+            conexion.transaction(() -> {
+                estudianteDao.insert(estudiantes);
+                Estudiante perico = estudianteDao.get(1L).orElse(null);
+                System.out.println("-- \nDatos de perico:");
+                System.out.println(perico);
+            });
         }
         catch(DataAccessException err) {
             System.err.printf("No pueden almacenarse los estudiantes: %s", err.getMessage());
@@ -76,29 +76,31 @@ public class Test {
 
         // Actualización de un estudiante
         try {
-            perico.setNombre("Perico de los Palotes");
-            if(estudianteDao.update(perico)) {
-                // Lo recuperamos de la base de datos.
-                perico = estudianteDao.get(1L).orElse(null);
-                System.out.printf("-- \nHemos actualizado Perico: %s\n", perico);
-            }
+            conexion.transaction(() -> {
+                Estudiante p = estudianteDao.get(1L).orElse(null);
+                p.setNombre("Perico de los Palotes");
+                if(estudianteDao.update(p)) {
+                    // Lo recuperamos de la base de datos.
+                    p = estudianteDao.get(1L).orElse(null);
+                    System.out.printf("-- \nHemos actualizado Perico: %s\n", p);
+                }
+            });
         }
         catch(DataAccessException err) {
-            System.err.printf("No puede actualizarse el estudiante '%s': %s", perico, err.getMessage());
+            System.err.printf("No puede actualizarse el estudiante", err.getMessage());
             System.exit(1);
         }
 
         // Ejemplo de transacción: intentamos actualizar ambos estudiantes.
         try {
-            conexion.transaction((cDao, eDao) -> {
-                Estudiante e1 = eDao.get(1L).orElse(null);
-                Estudiante e2 = eDao.get(3L).orElse(null); // No existe.
+            conexion.transaction(() -> {
+                Estudiante e1 = estudianteDao.get(1L).orElse(null);
+                Estudiante e2 = estudianteDao.get(3L).orElse(null); // No existe.
 
                 e1.setNombre("Estudiante 1");
-                eDao.update(e1);
-
+                estudianteDao.update(e1);
                 e2.setNombre("Estudiante 2"); // Falla: RuntimeException
-                eDao.update(e2);
+                estudianteDao.update(e2);
             });
         }
         catch(Exception err) {
@@ -107,8 +109,12 @@ public class Test {
 
         // Comprobación de que ningún estudiante se actualizó
         System.out.println("-- \nLista de estudiantes:");
-        try(Stream<Estudiante> estudiantes = estudianteDao.getStream()) {
-            estudiantes.forEach(System.out::println);
+        try {
+            conexion.transaction(() -> {
+                try(Stream<Estudiante> estudiantes = estudianteDao.getStream()) {
+                    estudiantes.forEach(System.out::println);
+                }
+            });
         }
         catch(DataAccessException err) {
             System.err.printf("No puede obtenerse la lista de estudiantes: %s", err.getMessage());
@@ -118,7 +124,7 @@ public class Test {
         // Listamos los centros existentes usando getList
         System.out.println("-- \nLista de centros:");
         try {
-            List<Centro> centros = centroDao.getList();
+            List<Centro> centros = conexion.transactionR(() -> centroDao.getList());
             centros.forEach(System.out::println);
         } catch (DataAccessException e) {
             System.err.println("Error al obtener la lista de centros: " + e.getMessage());

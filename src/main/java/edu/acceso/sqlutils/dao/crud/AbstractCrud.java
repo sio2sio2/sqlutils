@@ -1,31 +1,22 @@
 package edu.acceso.sqlutils.dao.crud;
 
-import java.sql.Connection;
 import java.util.Map;
 
-import javax.sql.DataSource;
-
-import edu.acceso.sqlutils.ConnProvider;
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.crud.MinimalCrudInterface;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.mapper.SqlTypesTranslator;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
+import edu.acceso.sqlutils.tx.TransactionManager;
 
 /** 
  * Clase que implementa las operaciones CRUD para una entidad genérica T.
  * @param <T> Tipo de entidad que extiende {@link Entity}.
- * 
- * <p>
- * Puede crearse a partir de una {@link DataSource} o una {@link Connection}.
- * En el primer caso, cada operación CRUD se ejecuta con una conexión nueva del pool.
- * En el segundo, se utiliza una conexión existente y todas las operaciones CRUD la comparten.
- * Esto es útil para transacciones que requieren múltiples operaciones CRUD.
- * </p>
  */
 public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInterface<T> {
-    /** DAO que proporciona acceso a datos relacionados. */
-    protected final ConnProvider cp;
+
+    protected final TransactionManager tm;
+
     /** Clase que implementa las sentencias SQL para las operaciones CRUD. */
     protected final MinimalSqlQuery sqlQuery;
     /**
@@ -44,38 +35,17 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
     protected final RelationLoader loader;
 
     /**
-     * Constructor que recibe un {@link DataSource} y una clase que implementa {@link MinimalSqlQuery}.
-     * @param ds Una fuente de datos para obtener conexiones a la base de datos.
+     * Constructor que recibe una clave y una clase que implementa {@link MinimalSqlQuery}.
+     * @param key Clave que identifica la fuente de datos.
      * @param entityClass La clase de la entidad que maneja este CRUD.
      * @param mappers El EntityMapper que mapea entidades a registros de la base de
      * @param sqlQueryClass La clase que implementa las consultas SQL.
      * @param loaderClass La clase que implementa el cargador de relaciones.
      */
     @SuppressWarnings("unchecked")
-    public AbstractCrud(DataSource ds, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
+    public AbstractCrud(String key, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
                         Class<? extends MinimalSqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
-        this.cp = new ConnProvider(ds);
-        this.mappers = mappers;
-        this.mapper = (EntityMapper<T>) mappers.get(entityClass);
-        if (mapper == null) {
-            throw new IllegalArgumentException(String.format("La entidad %s no está registrada", entityClass.getSimpleName()));
-        }
-        this.sqlQuery = createSqlQueryInstance(sqlQueryClass, mapper);
-        this.loader = createRelationLoaderInstance(loaderClass);
-    }
-
-    /**
-     * Constructor que recibe una {@link Connection} y una clase que implementa {@link MinimalSqlQuery}.
-     * @param conn Una conexión a la base de datos.
-     * @param entityClass La clase de la entidad que maneja este CRUD.
-     * @param mappers Los EntityMappers que mapean entidades a registros de la base de datos.
-     * @param sqlQueryClass La clase que implementa las consultas SQL.
-     * @param loaderClass La clase que implementa el cargador de relaciones.
-     */
-    @SuppressWarnings("unchecked")
-    public AbstractCrud(Connection conn, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
-                        Class<? extends MinimalSqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
-        this.cp = new ConnProvider(conn);
+        this.tm = TransactionManager.get(key);
         this.mappers = mappers;
         this.mapper = (EntityMapper<T>) mappers.get(entityClass);
         if (mapper == null) {
@@ -99,7 +69,7 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
      */
     @SuppressWarnings("unchecked")
     public <E extends Entity> AbstractCrud(AbstractCrud<E> dao, Class<T> entityClass) {
-        cp = dao.cp;
+        tm = dao.tm;
         mappers = dao.mappers;
         mapper = (EntityMapper<T>) mappers.get(entityClass);
         if (mapper == null) {
