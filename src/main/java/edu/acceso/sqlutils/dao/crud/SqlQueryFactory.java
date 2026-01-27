@@ -3,15 +3,19 @@ package edu.acceso.sqlutils.dao.crud;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import edu.acceso.sqlutils.dao.crud.simple.SimpleSqlQuery;
 
 /**
- * Fabrica de consultas SQL. Se utiliza un patrón Singleton ampliado para soporta
+ * Fabrica de consultas SQL. Se utiliza un patrón Multiton para soportar
  * el poder crearse distintos juegos de instancias. Dentro de cada juego las instancias
  * SqlQuery se asocian a los prefijos de la URL de conexión a la base de datos.
  * El prefijo genérico "*" se utiliza si no se encuentra el prefijo específico.
  */
 public class SqlQueryFactory {
+    private static final Logger logger = LoggerFactory.getLogger(SqlQueryFactory.class);
 
     /** Instancias de la fábrica. */
     private static Map<String, SqlQueryFactory> instances = new HashMap<>();
@@ -26,6 +30,7 @@ public class SqlQueryFactory {
     private SqlQueryFactory(String name, Map<String, Class<? extends SimpleSqlQuery>> mapper) {
         this.mapper = mapper;
         instances.put(name, this);
+        logger.debug("Creada SqlQueryFactory '{}' para {} versiones distintas de SQL", name, mapper.size());
     }
 
     /**
@@ -41,7 +46,7 @@ public class SqlQueryFactory {
 
         private Builder(String name) {
             this.name = name;
-         }
+        }
 
         /**
          * Método estático para iniciar la construcción de SqlQueryFactory.
@@ -60,6 +65,7 @@ public class SqlQueryFactory {
          */
         public Builder register(String prefix, Class<? extends SimpleSqlQuery> sqlQueryClass) {
             mapper.put(prefix, sqlQueryClass);
+            logger.trace("Registrada clase '{}' para el prefijo '{}'", sqlQueryClass.getSimpleName(), prefix);
             return this;
         }
 

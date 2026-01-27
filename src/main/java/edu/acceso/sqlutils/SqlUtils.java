@@ -20,12 +20,16 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import edu.acceso.sqlutils.errors.DataAccessRuntimeException;
 
 /**
  * Clase que implementa algunos métodos estáticos adicionales a JDBC.
  */
 public class SqlUtils {
+    private static final Logger logger = LoggerFactory.getLogger(SqlUtils.class);
 
     /**
      * Implementa un iterador a partir de un ResultSet.
@@ -173,6 +177,7 @@ public class SqlUtils {
                 sentencia += "\n" + linea;
 
                 if(contador == 0 && linea.endsWith(";")) {
+                    logger.trace("Sentencia SQL: {}", sentencia);
                     sentencias.add(sentencia);
                     sentencia = "";
                 }
@@ -199,11 +204,17 @@ public class SqlUtils {
         try (Statement stmt = conn.createStatement()) {
             for(String sentencia: splitSQL(st)) {
                 stmt.execute(sentencia);
+                logger.debug("Sentencia ejecutada: {}", sentencia);
             }
             conn.commit();
         } catch(SQLException err) {
-            conn.rollback();
-            throw new SQLException(err);
+            logger.error("Error al ejecutar el script SQL, se revierten todas las sentencias ejecutadas.", err);
+            try {
+                conn.rollback();
+            } catch(SQLException rollbackErr) {
+                err.addSuppressed(rollbackErr);
+            }
+            throw err;
         } finally {
             conn.setAutoCommit(originalAutoCommit);
         }

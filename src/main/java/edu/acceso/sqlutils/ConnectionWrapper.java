@@ -7,14 +7,10 @@ import java.lang.reflect.Proxy;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,20 +24,24 @@ public class ConnectionWrapper implements InvocationHandler {
 
     /** Conexión original que se envuelve. */
     private final Connection conn;
-    private Set<Statement> statements;
+    private final boolean forStream;
 
     /**
      * Constructor privado que crea un wrapper para una conexión.
      * @param conn La conexión original a envolver.
+     * @param forStream Indica si la conexión se usará para Streams en cuyo caso no se cerrarán las sentencias
+     * abiertas (aunque explícitamente se invoque su método close()) hasta que no se cierre la propia conexión.
      */
     private ConnectionWrapper(Connection conn, boolean forStream) {
         this.conn = conn;
-        statements = forStream ? Collections.synchronizedSet(new HashSet<>()) : null;
+        this.forStream = forStream;
     }
 
     /**
      * Crea un proxy de la conexión original que evita que se cierre al invocar close().
      * @param conn La conexión original a envolver.
+     * @param forStream Indica si la conexión se usará para obtener resultados que sean Streams en cuyo caso no se cerrarán las sentencias
+     * abiertas (aunque explícitamente se invoque su método close()) hasta que no se cierre la propia conexión.
      * @return Un objeto Connection que actúa como proxy de la conexión original.
      */
     public static Connection createProxy(Connection conn, boolean forStream) {
@@ -52,6 +52,16 @@ public class ConnectionWrapper implements InvocationHandler {
             new Class<?>[]{Connection.class},
             new ConnectionWrapper(conn, forStream)
         );
+    }
+
+    /**
+     * Crea un proxy de la conexión original que evita que se cierre al invocar close().
+     * Las conexiones creadas con este método están pensadas para usarse con Streams.
+     * @param conn La conexión original a envolver.
+     * @return Un objeto Connection que actúa como proxy de la conexión original.
+     */
+    public static Connection createProxy(Connection conn) {
+        return createProxy(conn, true);
     }
 
     @Override
@@ -65,42 +75,25 @@ public class ConnectionWrapper implements InvocationHandler {
                     return System.identityHashCode(proxy);
                 // Evitamos cerrar la conexión al invocar close().
                 case "close":
-                    if(isForStream()) {
-                        // Cerramos todas las sentencias abiertas.
-                        synchronized (statements) {
-                            for (Statement statement : statements) {
-                                try {
-                                    statement.close();
-                                } catch (SQLException e) {
-                                    logger.error("Error closing statement: " + statement, e);
-                                }
-                            }
-                            statements.clear();
-                        }
-                    }
+                    logger.trace("Capturada llamada a close(): la conexión no se cierra.");
                     return null;
                 default:
+                    Object result = method.invoke(conn, args);
                     if(isForStream()) {
                         // Cualquier otro método de la interfaz Connection
                         // se delega al objeto Connection original.
                         switch(method.getName()) {
-                            // Debemos interceptar los métodos que crean sentencias, porque queremos
-                            // apuntarlas al conjunto statements para cerrarlas más tarde.
+                            // Debemos interceptar los métodos que crean sentencias,
+                            // para que tampoco se puedan cerrar manualmente.
                             case "createStatement":
-                                Statement stmt = (Statement) method.invoke(conn, args);
-                                statements.add(stmt);
-                                return StatementWrapper.createProxy(stmt, this, Statement.class);
+                                return StatementWrapper.createProxy((Statement) result, Statement.class);
                             case "prepareStatement":
-                                PreparedStatement pstmt = (PreparedStatement) method.invoke(conn, args);
-                                statements.add(pstmt);
-                                return StatementWrapper.createProxy(pstmt, this, PreparedStatement.class);
+                                return StatementWrapper.createProxy((PreparedStatement) result, PreparedStatement.class);
                             case "prepareCall":
-                                CallableStatement cstmt = (CallableStatement) method.invoke(conn, args);
-                                statements.add(cstmt);
-                                return StatementWrapper.createProxy(cstmt, this, CallableStatement.class);
+                                return StatementWrapper.createProxy((CallableStatement) result, CallableStatement.class);
                         }
                     }
-                    return method.invoke(conn, args);
+                    return result;
             }
         }
         catch(InvocationTargetException e) {
@@ -110,11 +103,9 @@ public class ConnectionWrapper implements InvocationHandler {
 
     private static class StatementWrapper implements InvocationHandler {
         private final Statement stmt;
-        private final ConnectionWrapper parent;
 
-        private StatementWrapper(Statement stmt, ConnectionWrapper parent) {
+        private StatementWrapper(Statement stmt) {
             this.stmt = stmt;
-            this.parent = parent;
         }
 
         /**
@@ -123,11 +114,11 @@ public class ConnectionWrapper implements InvocationHandler {
          * @param type El tipo de la sentencia (Statement, PreparedStatement, CallableStatement).
          * @return Un objeto Statement que actúa como proxy de la sentencia original.
          */
-        public static <T extends Statement> T createProxy(T stmt, ConnectionWrapper cw, Class<T> type) {
+        public static <T extends Statement> T createProxy(T stmt, Class<T> type) {
             return type.cast(Proxy.newProxyInstance(
                 stmt.getClass().getClassLoader(),
                 getInterfaces(stmt),
-                new StatementWrapper(stmt, cw)
+                new StatementWrapper(stmt)
             ));
         }
 
@@ -153,7 +144,8 @@ public class ConnectionWrapper implements InvocationHandler {
             switch(method.getName()) {
                 // Interceptamos close() para eliminarla del Set de statements.
                 case "close":
-                    parent.statements.remove(stmt);
+                    logger.trace("Capturada llamada a close(): la sentencia no se cierra.");
+                    return null;
                 default:
                     try {
                         return method.invoke(stmt, args);
@@ -169,6 +161,6 @@ public class ConnectionWrapper implements InvocationHandler {
      * @return 
      */
     public boolean isForStream() {
-        return statements != null;
+        return forStream;
     }
 }

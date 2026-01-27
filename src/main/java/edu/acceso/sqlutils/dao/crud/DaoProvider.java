@@ -1,5 +1,8 @@
 package edu.acceso.sqlutils.dao.crud;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Proveedor de DAOs que proporciona una implementación de las operaciones CRUD y una definición de las consultas SQL.
  * Permite configurar qué clase se usará para definir las operaciones CRUD. En previsión de que un SGBD obligue a definir
@@ -7,6 +10,7 @@ package edu.acceso.sqlutils.dao.crud;
  * separada.
  */
 public class DaoProvider {
+    private static final Logger logger = LoggerFactory.getLogger(DaoProvider.class);
 
     /** Clase que implementa las operaciones CRUD */
     @SuppressWarnings("rawtypes")
@@ -23,6 +27,7 @@ public class DaoProvider {
                        Class<? extends MinimalSqlQuery> sqlQueryClass) {
         this.crudClass = crudClass;
         this.sqlQueryClass = sqlQueryClass;
+        logger.debug("Creado DaoProvider que implementa las operaciones '{}' con sentencias SQL '{}'.", crudClass.getSimpleName(), sqlQueryClass.getSimpleName());
     }
 
     /**

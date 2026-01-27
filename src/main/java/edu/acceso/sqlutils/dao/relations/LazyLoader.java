@@ -2,6 +2,9 @@ package edu.acceso.sqlutils.dao.relations;
 
 import java.lang.reflect.Method;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.dao.crud.AbstractCrud;
 import edu.acceso.sqlutils.errors.DataAccessException;
@@ -13,6 +16,7 @@ import javassist.util.proxy.ProxyObject;
  * Cargador perezoso de relaciones. Carga las relaciones de una entidad bajo demanda, es decir, cuando se accede a ellas.
  */
 public class LazyLoader extends RelationLoader {
+    private static final Logger logger = LoggerFactory.getLogger(LazyLoader.class);
 
     /**
      * Constructor.
@@ -103,6 +107,7 @@ public class LazyLoader extends RelationLoader {
                 RelationEntity<E> relationEntity = new RelationEntity<>(entityClass, id);
                 relationEntity.setLoadedEntity(realEntity);
                 loader.registrar(relationEntity);
+                logger.debug("Entidad '{}' con ID {} cargada de forma perezosa.", entityClass.getSimpleName(), id);
             }
             return method.invoke(realEntity, args);
         }

@@ -69,6 +69,19 @@ public interface EntityMapper<T extends Entity> {
     }
 
     /**
+     * Obtiene una instancia vacía de la entidad asociada a este mapper.
+     * @return La instancia requerida.
+     */
+    @SuppressWarnings("unchecked")
+    default T getEmptyEntity() {
+        try {
+            return getEntityType((Class<? extends EntityMapper<T>>) this.getClass()).getDeclaredConstructor().newInstance();
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("Error al crear una instancia de la entidad. ¿Tiene un constructor sin parámetros?", e);
+        }
+    }
+
+    /**
      * Convierte un ResultSet a una entidad.
      *
      * @param rs ResultSet que contiene los datos de la entidad.
@@ -78,12 +91,7 @@ public interface EntityMapper<T extends Entity> {
      */
     @SuppressWarnings("unchecked")
     default T resultSetToEntity(ResultSet rs, RelationLoader loader) throws SQLException {
-        T entity = null;
-        try {
-            entity = getEntityType((Class<? extends EntityMapper<T>>) this.getClass()).getDeclaredConstructor().newInstance();
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException("Error al crear una instancia de la entidad. ¿Tiene un constructor sin parámetros?", e);
-        }
+        T entity = getEmptyEntity();
         entity.setId(rs.getLong(getTableInfo().idColumn().getName()));
 
         for(Column column : getTableInfo().columns()) {

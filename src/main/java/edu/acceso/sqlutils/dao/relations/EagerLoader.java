@@ -2,6 +2,9 @@ package edu.acceso.sqlutils.dao.relations;
 
 import java.lang.reflect.Method;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.dao.crud.AbstractCrud;
 import edu.acceso.sqlutils.errors.DataAccessException;
@@ -13,6 +16,7 @@ import javassist.util.proxy.ProxyObject;
  * Cargador inmediato de relaciones. Carga las relaciones de una entidad en cuanto carga la entidad.
  */
 public class EagerLoader extends RelationLoader {
+    private static final Logger logger = LoggerFactory.getLogger(EagerLoader.class);
 
     /**
      * Constructor.
@@ -48,6 +52,8 @@ public class EagerLoader extends RelationLoader {
 
             MethodHandler handler = new LazyMethodHandler<>(getLoopBeginning());
             ((ProxyObject) proxyInstance).setHandler(handler);
+            logger.debug("Referencia circular detectada. La entidad '{}' con ID {} se obtiene de caché para evitar el ciclo infinito.", 
+                entityClass.getSimpleName(), id);
 
             return proxyInstance;
         }

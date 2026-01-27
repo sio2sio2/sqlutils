@@ -45,6 +45,7 @@ public class DaoFactory {
         this.daoProvider = daoProvider;
         this.loaderClass = loaderClass;
         this.mappers = mappers;
+        logger.debug("Creada DaoFactory '{}' para {} entidades que utilizan las operaciones definidas por '{}[{}]'.", key, mappers.size(), daoProvider.getCrudClass().getSimpleName(), daoProvider.getSqlQueryClass().getSimpleName());
     }
 
     /**
@@ -88,9 +89,10 @@ public class DaoFactory {
             try {
                 mapper = entityMapperClass.getDeclaredConstructor().newInstance();
             } catch (ReflectiveOperationException e) {
-                throw new RuntimeException("Error al crear instancia de EntityMapper", e);
+                throw new RuntimeException("Error al crear instancia de '%s'".formatted(entityMapperClass.getSimpleName()), e);
             }
             mappers.put(entityClass, mapper);
+            logger.trace("Registrado mapper '{}'' para la entidad '{}'", entityMapperClass.getSimpleName(), entityClass.getSimpleName());
             return this;
         }
 

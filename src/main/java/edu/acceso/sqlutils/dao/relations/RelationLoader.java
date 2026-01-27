@@ -4,6 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.dao.crud.AbstractCrud;
 import edu.acceso.sqlutils.errors.DataAccessException;
@@ -17,6 +20,7 @@ import edu.acceso.sqlutils.errors.DataAccessException;
  * {@link #getDao(Class)} para obtener un nuevo DAO que comparte el mismo cargador de relaciones.
  */
 public abstract class RelationLoader {
+    private static final Logger logger = LoggerFactory.getLogger(RelationLoader.class);
 
     /** DAO a partir de cual se crea el cargador. */
     protected final AbstractCrud<? extends Entity> originalDao;
@@ -32,6 +36,8 @@ public abstract class RelationLoader {
      */
     public RelationLoader(AbstractCrud<? extends Entity> dao) {
         this.originalDao = dao;
+        logger.debug("Creado cargador de relaciones para DAO de una entidad '{}'", 
+            dao.getEntityClass().getSimpleName());
     }
 
     /**
@@ -76,7 +82,11 @@ public abstract class RelationLoader {
         if(loopBeginning == null) {
             // ¿Está relationEntity ya en el historial? Lo apuntamos en ese caso.
             int idx = historial.indexOf(relationEntity);
-            if(idx >= 0) loopBeginning = historial.get(idx);
+            if(idx >= 0) {
+                loopBeginning = historial.get(idx);
+                logger.debug("Detectado ciclo de referencias comenzando en la entidad '{}' con ID {}", 
+                    loopBeginning.getEntityClass().getSimpleName(), loopBeginning.getId());
+            }
         }
 
         return relationEntity.equals(loopBeginning);
@@ -98,6 +108,8 @@ public abstract class RelationLoader {
      */
     protected void registrar(RelationEntity<? extends Entity> entity) {
         historial.add(entity);
+        logger.trace("Registrada entidad '{}' con ID {} en el historial de relaciones", 
+            entity.getEntityClass().getSimpleName(), entity.getId());
     }
 
     /**

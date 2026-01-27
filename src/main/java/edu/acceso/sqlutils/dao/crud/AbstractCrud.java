@@ -2,6 +2,9 @@ package edu.acceso.sqlutils.dao.crud;
 
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.crud.MinimalCrudInterface;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
@@ -14,6 +17,7 @@ import edu.acceso.sqlutils.tx.TransactionManager;
  * @param <T> Tipo de entidad que extiende {@link Entity}.
  */
 public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInterface<T> {
+    public static final Logger logger = LoggerFactory.getLogger(AbstractCrud.class);
 
     protected final TransactionManager tm;
 
@@ -52,7 +56,17 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
             throw new IllegalArgumentException(String.format("La entidad %s no está registrada", entityClass.getSimpleName()));
         }
         this.sqlQuery = createSqlQueryInstance(sqlQueryClass, mapper);
+        // TODO:: Revisar esto. Un mismo DAO puede usarse para cargar dos entidades sin relación entre ellas.
+        // Por ejemplo, la obtención de dos estudiantes. Estos dos estudiantes comparten el mismo DAO y, por tanto,
+        // el mismo RelationLoader, pero no deberían esto último puesto que entonces comparten el historial de entidades cargadas.
         this.loader = createRelationLoaderInstance(loaderClass);
+        logger.debug("Creado DAO para '{}' con '{}', con operaciones '{}[{}]' y usando como estrategia para carga de entidades foráneas '{}'.",
+            entityClass.getSimpleName(),
+            mapper.getClass().getSimpleName(),
+            this.getClass().getSimpleName(),
+            sqlQueryClass.getSimpleName(),
+            loaderClass.getSimpleName()
+        );
     }
 
     /**
@@ -77,6 +91,11 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
         }
         sqlQuery = createSqlQueryInstance(dao.sqlQuery.getClass(), mapper);
         loader = dao.loader;
+        logger.atTrace()
+            .setMessage("Creado DAO de '{}' para cargarlo como entidad foránea de una entidad '{}'.")
+            .addArgument(entityClass.getSimpleName())
+            .addArgument(() -> dao.getEntityClass().getSimpleName())
+            .log();
     }
 
     /**
@@ -108,6 +127,14 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Error al crear instancia de SqlQuery", e);
         }
+    }
+
+    /**
+     * Obtiene la clase de la entidad manejada por este objeto DAO.
+     * @return La clase de la entidad relacionada.
+     */
+    public Class<? extends Entity> getEntityClass() {
+        return mapper.getEmptyEntity().getClass();
     }
 
     /**

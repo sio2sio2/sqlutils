@@ -90,7 +90,8 @@ public class TransactionManager {
      */
     public static TransactionManager create(String key, DataSource ds) {
         TransactionManager tm = new TransactionManager(key, ds);
-        if(instances.putIfAbsent(key, tm) != null) throw new IllegalStateException("TransactionManager ya ha sido inicializado.");
+        if(instances.putIfAbsent(key, tm) != null) throw new IllegalStateException("La conexión {} ya tenía creada un gestor de transacciones".formatted(key));
+        logger.debug("Creado gestor de transacciones para la conexión '{}'", key);
 
         return tm;
     }
@@ -114,6 +115,7 @@ public class TransactionManager {
     public void begin() throws SQLException {
         if(counter.get() > 0) {
             counter.set(counter.get() + 1);
+            logger.debug("Transacción anidada para el pool de conexiones '{}'. Nivel de anidamiento: {}", key, counter.get());
             return;
         }
 
@@ -122,6 +124,7 @@ public class TransactionManager {
         conn.setAutoCommit(false);
         connectionHolder.set(conn);
         counter.set(counter.get() + 1);
+        logger.debug("Iniciada transacción para el pool de conexiones '{}'.", key);
     }
 
     /**
@@ -133,6 +136,7 @@ public class TransactionManager {
      */
     public Connection getConnectionForList() {
         if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para disponer de una conexión");
+        logger.trace("Protegiendo la conexión asociada a la transacción '{}'. Sus statements no se protegen contra el cierre.", key);
         return ConnectionWrapper.createProxy(connectionHolder.get(), false);
     }
 
@@ -142,6 +146,7 @@ public class TransactionManager {
      */
     public Connection getConnection() {
         if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para disponer de una conexión");
+        logger.trace("Protegiendo la conexión asociada a la transacción '{}'. Sus statements también se protegen contra el cierre.", key);
         return ConnectionWrapper.createProxy(connectionHolder.get(), true);
     }
 
@@ -180,6 +185,7 @@ public class TransactionManager {
                         conn.commit();
                         conn.setAutoCommit(originalAutoCommit.get());
                         conn.close();
+                        logger.debug("Confirmada transacción para el pool de conexiones '{}'.", key);
                     } finally {
                         connectionHolder.remove();
                         originalAutoCommit.remove();
@@ -189,6 +195,7 @@ public class TransactionManager {
                 break;
             default:
                 counter.set(counter.get() - 1);
+                logger.trace("La transacción '{}' está anidada. La confirmación sólo regresa al nivel {}", key, counter.get());
         }
     }
 
@@ -231,6 +238,7 @@ public class TransactionManager {
             commit();
         } catch (Throwable e) {
             rollbackandThrow(e);
+            logger.debug("Deshecha transacción para el pool de conexiones '{}'.", key);
         }
 
         return value;

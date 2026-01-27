@@ -11,6 +11,9 @@ import java.util.Objects;
 
 import javax.sql.DataSource;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
@@ -21,6 +24,7 @@ import com.zaxxer.hikari.HikariDataSource;
  * contraseña.
  */
 public class ConnectionPool implements AutoCloseable {
+    private static final Logger logger = LoggerFactory.getLogger(ConnectionPool.class);
 
     /** Mapa con las instancias creadas **/
     private static final Map<String, ConnectionPool> instances = new ConcurrentHashMap<>();
@@ -60,10 +64,11 @@ public class ConnectionPool implements AutoCloseable {
         if(instances.containsKey(key)) throw new IllegalStateException("Ya hay una instancia asociada a la clave");
 
 	    ConnectionPool instance = new ConnectionPool(key, dbUrl, user, password);
+        logger.debug("Creado nuevo pool de conexiones para la clave {}", key);
         ConnectionPool previa = instances.putIfAbsent(key, instance);
 
-        // Otro hilo generó una instancia.
         if(previa != null) {
+            logger.debug("Otro hilo creó una instancia para la clave {}: cerrando la recién creada", key);
             instance.close();
             throw new IllegalStateException("Ya hay una instancia asociada a la clave");
         }
@@ -89,8 +94,12 @@ public class ConnectionPool implements AutoCloseable {
         ConnectionPool instance = instances.get(key);
         if(instance == null) throw new IllegalStateException("No existe una instancia para la clave %s".formatted(key));
 
-        if(instance.isOpen()) return instance;
+        if(instance.isOpen()) {
+            logger.debug("Hallado pool abierto de conexiones para la clave {}", key);
+            return instance;
+        }
         else {
+            logger.debug("Hallado pool de conexiones para la clave {}, pero no está abierto", key);
             instances.remove(key, instance);
             throw new IllegalStateException("La instancia solicitada no existe.");
         }
@@ -109,6 +118,7 @@ public class ConnectionPool implements AutoCloseable {
         if(closed.compareAndSet(false, true)) {
             instances.remove(key, this);
             ds.close();
+            logger.debug("Pool de conexiones cerrado para la clave {}", key);
         }
     }
 
@@ -134,9 +144,11 @@ public class ConnectionPool implements AutoCloseable {
             try (ResultSet tables = metaData.getTables(catalog, schema, "%", new String[]{"TABLE"})) {
                 while (tables.next()) {
                     String tableName = tables.getString("TABLE_NAME");
+                    logger.trace("Hallada tabla en la base de datos: {}. Comprobando si es tabla del sistema...", tableName);
                     
                     // Filtrar tablas del sistema según el SGBD
                     if (!isGenericSystemTable(tableName)) {
+                        logger.debug("{} es una tabla de usuario. Se presupone que la base de datos está completamente inicializada.", tableName);
                         return true; // Encontramos al menos una tabla de usuario
                     }
                 }
