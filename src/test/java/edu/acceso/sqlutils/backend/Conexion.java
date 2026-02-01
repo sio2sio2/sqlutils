@@ -44,8 +44,6 @@ public class Conexion {
     private final DaoFactory daoFactory;
     /** Pool de conexiones a la base de datos */
     private final ConnectionPool cp;
-    /** Gestor de transacciones */
-    private final TransactionManager tm;
 
     /** Interfaz funcional para ejecutar transacciones con DAOs de Centro y Estudiante */
     @FunctionalInterface
@@ -68,7 +66,6 @@ public class Conexion {
     private Conexion(String key, ConnectionPool cp, DaoFactory daoFactory) {
         this.daoFactory = daoFactory;
         this.cp = cp;
-        this.tm = TransactionManager.create(key, cp.getDataSource());
     }
 
     /**
@@ -100,7 +97,7 @@ public class Conexion {
         DaoFactory daoFactory = DaoFactory.Builder.create(daoProvider)
             .registerMapper(CentroMapper.class)
             .registerMapper(EstudianteMapper.class)
-            .get(DB_KEY, LoaderFactory.LAZY);
+            .get(DB_KEY, cp, LoaderFactory.EAGER);
 
         instance = new Conexion(DB_KEY, cp, daoFactory)
             .inicializar(config.getInput());
@@ -153,7 +150,8 @@ public class Conexion {
      * @throws DataAccessException Si hay un error durante la transacción.
      */
     public <T> T transactionR(TransactionInterfaceR<T> operations) throws DataAccessException {
-        return tm.transaction(conn -> { return operations.run(); });
+        //return daoFactory.getTransactionManager().transaction(conn -> { return operations.run(); });
+        return TransactionManager.get(DB_KEY).transaction(conn -> { return operations.run(); });
     }
 
     /**
@@ -162,6 +160,6 @@ public class Conexion {
      * @throws DataAccessException Si hay un error durante la transacción.
      */
     public void transaction(TransactionInterface operations) throws DataAccessException {
-        tm.transaction(conn -> { operations.run(); });
+        TransactionManager.get(DB_KEY).transaction(conn -> { operations.run(); });
     }
 }

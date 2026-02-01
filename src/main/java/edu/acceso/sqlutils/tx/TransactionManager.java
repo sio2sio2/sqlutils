@@ -72,13 +72,24 @@ public class TransactionManager {
         void run(Connection conn) throws DataAccessException;
     }
 
-    /** Constructor privado para implementar el patrón Multiton */
-    private TransactionManager(String key, DataSource ds) {
+    /** Constructor protegido para implementar el patrón Multiton */
+    protected TransactionManager(String key, DataSource ds) {
         this.key = key;
         this.ds = ds;
         connectionHolder = new ThreadLocal<>();
         counter = ThreadLocal.withInitial(() -> 0);
         originalAutoCommit = new ThreadLocal<>();
+    }
+
+    /**
+     * Registra una nueva instancia de TransactionManager.
+     * @param key La clave identificativa del gestor.
+     * @param tm El gestor de transacciones a registrar.
+     * @throws IllegalStateException Si ya hay un gestor inicializado con la misma clave.
+     */
+    protected static void registerInstance(String key, TransactionManager tm) {
+        if(instances.putIfAbsent(key, tm) != null) throw new IllegalStateException("La conexión {} ya tenía creada un gestor de transacciones".formatted(key));
+        else logger.debug("Creado gestor de transacciones para la conexión '{}'", key);
     }
 
     /**
@@ -90,9 +101,7 @@ public class TransactionManager {
      */
     public static TransactionManager create(String key, DataSource ds) {
         TransactionManager tm = new TransactionManager(key, ds);
-        if(instances.putIfAbsent(key, tm) != null) throw new IllegalStateException("La conexión {} ya tenía creada un gestor de transacciones".formatted(key));
-        logger.debug("Creado gestor de transacciones para la conexión '{}'", key);
-
+        registerInstance(key, tm);
         return tm;
     }
 
@@ -113,7 +122,7 @@ public class TransactionManager {
      * @throws SQLException Si ocurre un error al iniciar la transacción.
      */
     public void begin() throws SQLException {
-        if(counter.get() > 0) {
+       if(counter.get() > 0) {
             counter.set(counter.get() + 1);
             logger.debug("Transacción anidada para el pool de conexiones '{}'. Nivel de anidamiento: {}", key, counter.get());
             return;
@@ -125,6 +134,7 @@ public class TransactionManager {
         connectionHolder.set(conn);
         counter.set(counter.get() + 1);
         logger.debug("Iniciada transacción para el pool de conexiones '{}'.", key);
+        onBegin();
     }
 
     /**
@@ -187,9 +197,7 @@ public class TransactionManager {
                         conn.close();
                         logger.debug("Confirmada transacción para el pool de conexiones '{}'.", key);
                     } finally {
-                        connectionHolder.remove();
-                        originalAutoCommit.remove();
-                        counter.remove();
+                        mrProper();
                     }
                 }
                 break;
@@ -199,6 +207,11 @@ public class TransactionManager {
         }
     }
 
+    /**
+     * Deshace la transacción actual y lanza una excepción adecuada.
+     * @param e La excepción que causó el deshacer la transacción.
+     * @throws DataAccessException La propia excepción que se tomó como parámetro, envuelta si es preciso.
+     */
     public void rollbackandThrow(Throwable e) throws DataAccessException {
         Connection conn = connectionHolder.get();
 
@@ -212,14 +225,22 @@ public class TransactionManager {
             logger.error("Error al deshacer la transacción", ex);
             if(e != null) e.addSuppressed(ex);
         } finally {
-            connectionHolder.remove();
-            originalAutoCommit.remove();
-            counter.remove();
+            mrProper();
         }
         if(e instanceof RuntimeException re) throw re;
         if(e instanceof DataAccessException re) throw re;
         if(e instanceof Error re) throw re;
         else throw new DataAccessException("Error en la transacción", e);
+    }
+
+    /**
+     * Limpia los recursos asociados a la transacción actual.
+     */
+    private void mrProper() {
+        connectionHolder.remove();
+        originalAutoCommit.remove();
+        counter.remove();
+        onClose();
     }
 
     /**
@@ -244,6 +265,9 @@ public class TransactionManager {
         return value;
     }
 
+    protected void onBegin() { /* Hook para acciones al iniciar la transacción */ }
+    protected void onClose() { /* Hook para acciones al cerrar la transacción */ }
+
     /**
      * Ejecuta operaciones dentro de una transacción.
      * @param operations Operaciones a ejecutar dentro de la transacción.
@@ -258,7 +282,7 @@ public class TransactionManager {
 
     /**
      * Indica si en el hilo actual la transacción está abierta.
-     * @return `true`, si la transacción está abierta.
+     * @return {@code true}, si la transacción está abierta.
      */
     public boolean isActive() {
         return counter.get() > 0;

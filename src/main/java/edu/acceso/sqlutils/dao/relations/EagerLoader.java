@@ -14,31 +14,54 @@ import javassist.util.proxy.ProxyObject;
 
 /**
  * Cargador inmediato de relaciones. Carga las relaciones de una entidad en cuanto carga la entidad.
+ * @param <E> Tipo de entidad que cargará el cargador de relaciones.
  */
-public class EagerLoader extends RelationLoader {
+public class EagerLoader<E extends Entity> extends RelationLoader<E> {
     private static final Logger logger = LoggerFactory.getLogger(EagerLoader.class);
 
     /**
      * Constructor.
-     * @param dao DAO a partir del cual se crea el cargador de relaciones
+     * @param originalDao DAO a partir del cual se crea el cargador de relaciones
+     * @param entityClass Clase de la entidad que carga este cargador de relaciones
      */
-    public EagerLoader(AbstractCrud<? extends Entity> dao) {
-        super(dao);
+    public EagerLoader(AbstractCrud<? extends Entity> originalDao, Class<E> entityClass) throws DataAccessException {
+        super(originalDao, entityClass);
     }
 
+    /**
+     * Carga inmediata de la entidad relacionada.
+     * @param id ID de la entidad relacionada.
+     * 
+     * <p>El problema de la carga inmediata es la creación de un ciclo infinito de referencias:</p>
+     * <pre>A -> B -> C -> D -> E -> C</pre>
+     * <p>
+     * Cuando se crea un ciclo infinito, es se vuelve a cargar una entidad que ya se cargó anteriormente
+     * ("C" en el ejemplo). La carga inmediata supone que recursivamente se carguen todas las entidades
+     * relacionadas y que no se genere realmente la entidad, hasta que se haya resuelto toda la cadena
+     * de relaciones tras ella. Por eso, en elk ejemplo, para que la entidad "C" se genere, es necesario que
+     * priviamente lo hagan "D" y "E". Pero "E" requiere que "C" se haya generado antes, lo que provoca el
+     * ciclo infinito. Para resolverlo, este segundo "C" se detecta como ya cargado en el historial de
+     * relaciones y se resuelve de forma perezosa mediante el proxy {@link LazyMethodHandler}. Eso
+     * posibilita que se generen todas las entidades (A, B, C, D, E). Luego, si en algún momento se accede
+     * al segundo "C", el proxy resuelve el problema consultado el "C" que ya se había cargado en el
+     * historial de relaciones.
+     * </p>
+     *
+     */
     @SuppressWarnings("unchecked")
     @Override
-    public <E extends Entity> E loadEntity(Class<E> entityClass, Long id) throws DataAccessException {
+    public E loadEntity(Long id) throws DataAccessException {
         if(id == null) return null; // Si no hay relación, no es necesario cargar nada.
 
-        RelationEntity<E> relationEntity = new RelationEntity<>(entityClass, id);
+        // Establecemos el RelationEntity asoaciado a este cargador
+        setRl(id);
 
         // Las referencias generan un ciclo infinito, así que devolvemos un proxy
         // en vez de la entidad directamente para romper el bucle.
-        if(isLoaded(relationEntity)) {
+        if(checkAlreadyLoaded()) {
             // Factoría efímera de proxies
             ProxyFactory factory = new ProxyFactory();
-            factory.setSuperclass(entityClass);
+            factory.setSuperclass(getEntityClass());
 
             Class<?> proxyClass = factory.createClass();
 
@@ -47,24 +70,20 @@ public class EagerLoader extends RelationLoader {
                 proxyInstance = (E) proxyClass.getDeclaredConstructor().newInstance();
             }
             catch (ReflectiveOperationException e) {
-                throw new DataAccessException(String.format("Error al crear proxy para '%s'. ¿Tiene un constructor sin argumentos?", entityClass.getSimpleName()), e);
+                throw new DataAccessException("Error al crear proxy para '%s'. ¿Tiene un constructor sin argumentos?".formatted(dao.getEntityClass().getSimpleName()), e);
             }
 
-            MethodHandler handler = new LazyMethodHandler<>(getLoopBeginning());
+            MethodHandler handler = new LazyMethodHandler<>(getRl());
             ((ProxyObject) proxyInstance).setHandler(handler);
-            logger.debug("Referencia circular detectada. La entidad '{}' con ID {} se obtiene de caché para evitar el ciclo infinito.", 
-                entityClass.getSimpleName(), id);
 
+            logger.debug("Se genera un proxy para obtener entidad '{}' con ID {}", getEntityClass().getSimpleName(), id);
             return proxyInstance;
         }
     
-        registrar(relationEntity); // <-- Aquí se apunta en el historial (su entity aún es null)
+        E entity = dao.get(id).orElse(null);   // <-- Aquí se carga la entidad relacionada.
+        if(entity == null) throw new DataAccessException("Problema de integridad referencial. ID %d usando como clave foránea no existe".formatted(id));
 
-        AbstractCrud<E> daoCrud = getDao(entityClass);
-        E entity = (E) daoCrud.get(id).orElse(null);   // <-- Aquí se carga la entidad relacionada.
-        if(entity == null) throw new DataAccessException(String.format("Problema de integridad referencial. ID %d usando como clave foránea no existe", id));
-
-        relationEntity.setLoadedEntity(entity);  // <-- Aquí se establece el valor de loadedEntity.
+        getRl().setLoadedEntity(entity);  // <-- Aquí se establece el valor de loadedEntity.
  
         return entity;
     }
@@ -72,21 +91,6 @@ public class EagerLoader extends RelationLoader {
     /**
      * Manejador de métodos que carga de forma perezosa la entidad relacionada que provoca
      * el ciclo infinito.
-     * 
-     * <p>Obsérvese una carga de entidades relacionadas que presenta un bucle:</p>
-     * <pre>A -> B -> C -> D -> E -> C</pre>
-     * <p>
-     * Cuando se crea un ciclo infinito, es porque la entidad relacionada ("C" en el ejemplo) ya
-     * se pretendió cargar en un punto anterior del historial y, por tanto, hay un
-     * {@link RelationEntity} que en principio la tiene. Sin embargo, la carga inmediata supone que
-     * recursivamente se carguen todas las entidades relacionadas y que no se genere realmente la
-     * entidad, hasta que se haya resuelto la cadena de relaciones tras ella. En el ejemplo, para que
-     * "C" se genere, es necesario que "D" y "E" lo hayan hecho antes. Pero "E" requiere
-     * que "C" se haya generado, lo que provoca un ciclo infinito. Para resolverlo el "C" que se relaciona
-     * con "E" se resuelve de forma perezosa mediante un proxy. Eso posibilita que se generen todas las entidades
-     * (A, B, C, D, E). Luego, si en algún momento se accede a "C" desde "E", el proxy resuelve el problema
-     * consultado el "C" que ya se había cargado en el historial de relaciones.
-     * </p>
      */
     private static class LazyMethodHandler<E extends Entity> implements MethodHandler {
         private final RelationEntity<E> relationEntity;

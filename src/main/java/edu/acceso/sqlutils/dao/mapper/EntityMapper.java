@@ -9,6 +9,7 @@ import java.sql.SQLException;
 import java.sql.Types;
 
 import edu.acceso.sqlutils.crud.Entity;
+import edu.acceso.sqlutils.dao.crud.AbstractCrud;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
 import edu.acceso.sqlutils.errors.DataAccessException;
 
@@ -85,12 +86,12 @@ public interface EntityMapper<T extends Entity> {
      * Convierte un ResultSet a una entidad.
      *
      * @param rs ResultSet que contiene los datos de la entidad.
-     * @param loader Cargador de relaciones para entidades relacionadas.
+     * @param dao Cargador de relaciones para entidades relacionadas.
      * @return Entidad convertida.
      * @throws SQLException Si ocurre un error al acceder a los datos.
      */
     @SuppressWarnings("unchecked")
-    default T resultSetToEntity(ResultSet rs, RelationLoader loader) throws SQLException {
+    default T resultSetToEntity(ResultSet rs, AbstractCrud<? extends Entity> dao) throws SQLException {
         T entity = getEmptyEntity();
         entity.setId(rs.getLong(getTableInfo().idColumn().getName()));
 
@@ -104,7 +105,8 @@ public interface EntityMapper<T extends Entity> {
                 if(Column.isForeignKey(fieldType)) {
                     value = rs.getObject(column.getName(), Long.class);
                     try {
-                        if(value != null) value = loader.loadEntity((Class<? extends Entity>) fieldType, (Long) value);
+                        RelationLoader<? extends Entity> loader = dao.createNewRelationLoader((Class<? extends Entity>) fieldType);
+                        if(value != null) value = loader.loadEntity((Long) value);
                     } catch (DataAccessException e) {
                         throw new SQLException(String.format("Error al cargar la entidad relacionada: %s", column.getField()), e.getCause());
                     }
@@ -135,7 +137,7 @@ public interface EntityMapper<T extends Entity> {
             if (genericInterface instanceof ParameterizedType) {
                 if (((ParameterizedType) genericInterface).getRawType().equals(EntityMapper.class)) {
                     Type[] typeArguments = ((ParameterizedType) genericInterface).getActualTypeArguments();
-                    if (typeArguments.length > 0 && typeArguments[0] instanceof Class<?> typeArg && Entity.class.isAssignableFrom(typeArg)) {
+                    if (typeArguments.length > -1 && typeArguments[0] instanceof Class<?> typeArg && Entity.class.isAssignableFrom(typeArg)) {
                         return (Class<T>) typeArg;
                     }
                 }

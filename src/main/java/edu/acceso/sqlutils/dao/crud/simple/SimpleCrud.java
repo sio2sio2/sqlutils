@@ -17,6 +17,8 @@ import edu.acceso.sqlutils.dao.crud.AbstractCrud;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.mapper.SqlTypesTranslator;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
+import edu.acceso.sqlutils.dao.tx.Cache;
+import edu.acceso.sqlutils.dao.tx.DaoTransactionManager;
 import edu.acceso.sqlutils.errors.DataAccessException;
 
 /** 
@@ -36,33 +38,75 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
      * @param loaderClass Clase que implementa {@link RelationLoader}.
      */
     public SimpleCrud(String key, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
-                      Class<? extends SimpleSqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
+                      Class<? extends SimpleSqlQuery> sqlQueryClass, Class<? extends RelationLoader<? extends Entity>> loaderClass) {
         super(key, entityClass, mappers, sqlQueryClass, loaderClass);
     }
 
     /**
-     * Constructor que crea una nueva instancia de {@link SimpleCrud} a partir de otro {@link SimpleCrud}.
+     * Constructor que crea una nueva instancia de {@link SimpleCrud} a partir de un objeto {@link RelationLoader}.
      * 
      * <p>
-     * Un {@link SimpleCrud} obtenido de este modo comparte el cargador de relaciones (véase
-     * {@link RelationLoader}) con el original, lo que permite que éste conserve el historial
-     * de todas las relaciones cargadas.
+     * Este objeto {@link SimpleCrud} se construye compartiendo los mismos parámeros que el DAO original
+     * que creó el {@link RelationLoader} que se le pasa como argumento. Esto permite conocer
+     * cuál es el historial de entidades cargadas y evitar ciclos de referencia.
      * </p>
-     * @param <E> Tipo de entidad del {@link SimpleCrud} original.
-     * @param dao El {@link SimpleCrud} original a partir del cual se obtiene el nuevo.
-     * @param entityClass La clase de la entidad que maneja el nuevo {@link SimpleCrud}.
+     * @param originalDao DAO original del que se crea este nuevo DAO.
+     * @param rl {@link RelationLoader} que origina este DAO.
      */
-    public <E extends Entity> SimpleCrud(SimpleCrud<E> dao, Class<T> entityClass) {
-        super(dao, entityClass);
+    public SimpleCrud(SimpleCrud<? extends Entity> originalDao, RelationLoader<T> rl) {
+        super(originalDao, rl);
     }
 
     private SimpleSqlQuery getSqlQuery() {
         return (SimpleSqlQuery) sqlQuery;
     }
 
+    /**
+     * Busca la entidad en la caché de la transacción actual.
+     * @param id ID de la entidad a buscar.
+     * @return Entidad encontrada en la caché o {@code null} si no existe.
+     */
+    protected T searchInCache(Long id) {
+        Cache cache = ((DaoTransactionManager) tm).getCache();
+        if (cache == null) return null;
+
+        T entity = (T) cache.get(getEntityClass(), id);
+        return entity;
+    }
+
+    /**
+     * Almacena la entidad en la caché de la transacción actual.
+     * @param entity Entidad a almacenar.
+     */
+    protected T putInCache(T entity) {
+        ((DaoTransactionManager) tm).getCache().put(entity);
+        return entity;
+    }   
+
+    /**
+     * Elimina la entidad de la caché de la transacción actual.
+     * @param id ID de la entidad a eliminar.
+     * @return Entidad eliminada de la caché o {@code null} si no existía.
+     */
+    protected T deleteFromCache(Long id) {
+        return ((DaoTransactionManager) tm).getCache().delete(getEntityClass(), id);
+    }
+
+    /**
+     * Verifica que la transacción esté activa.
+     * @throws IllegalStateException Si el gestor de transacciones no tiene una transacción abierta.
+     */
+    private void checkTransactionActive() {
+        if (!tm.isActive()) throw new IllegalStateException("El gestor de transacciones {} no tiene una transacción abierta.".formatted(tm.getKey()));
+    }
+
     @Override
     public Optional<T> get(Long id) throws DataAccessException {
         final String sql = sqlQuery.getSelectIdSql();
+        checkTransactionActive();
+
+        T entity = searchInCache(id);
+        if (entity != null) return Optional.of(entity);
 
         try(
             Connection conn = tm.getConnection();
@@ -71,7 +115,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             pstmt.setLong(1, id);
             ResultSet rs = pstmt.executeQuery();
             return rs.next()
-                ? Optional.of(mapper.resultSetToEntity(rs, loader))
+                ? Optional.of(putInCache(mapper.resultSetToEntity(rs, this)))
                 : Optional.empty();
         } catch (SQLException e) {
             logger.warn("Error al obtener el registro con ID {} de la tabla {}", id, mapper.getTableInfo().tableName(), e);
@@ -89,9 +133,9 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             PreparedStatement pstmt = conn.prepareStatement(sql);
             ResultSet rs = pstmt.executeQuery();
 
-            Stream<T> stream = SqlUtils.resultSetToStream(conn, pstmt, rs, fila -> mapper.resultSetToEntity(fila, loader));
+            Stream<T> stream = SqlUtils.resultSetToStream(conn, pstmt, rs, fila -> mapper.resultSetToEntity(fila, this));
             logger.info("Se ha obtenido un stream de registros de la tabla {}", mapper.getTableInfo().tableName());
-            return stream;
+            return stream.peek(this::putInCache);
         } catch (SQLException e) {
             logger.warn("Error al obtener el stream de registros de la tabla {}", mapper.getTableInfo().tableName(), e);
             throw new DataAccessException("Error al obtener el stream de registros", e);
@@ -115,12 +159,12 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             pstmt.setObject(1, value, translator.getType());
             ResultSet rs = pstmt.executeQuery();
 
-            Stream<T> stream = SqlUtils.resultSetToStream(conn, pstmt, rs, fila -> mapper.resultSetToEntity(fila, loader));
+            Stream<T> stream = SqlUtils.resultSetToStream(conn, pstmt, rs, fila -> mapper.resultSetToEntity(fila, this));
             logger.info("Se ha obtenido un stream de registros de la tabla {}", mapper.getTableInfo().tableName());
-            return stream;
+            return stream.peek(this::putInCache);
         } catch (SQLException e) {
             logger.warn("Error al obtener los registros de la tabla {} donde {} = {}", mapper.getTableInfo().tableName(), column, value, e);
-            throw new DataAccessException(String.format("Error al obtener los registros de la tabla %s donde %s = %d", mapper.getTableInfo().tableName(), column, value), e);
+            throw new DataAccessException("Error al obtener los registros de la tabla '%s' donde %s = %d".formatted(mapper.getTableInfo().tableName(), column, value), e);
         }
     }
 
@@ -133,10 +177,15 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             PreparedStatement pstmt = conn.prepareStatement(sql);
         ) {
             pstmt.setLong(1, id);
-            return pstmt.executeUpdate() > 0;
+            boolean result = pstmt.executeUpdate() > 0;
+            if(result) {
+                logger.info("Registro con ID {} eliminado de la tabla {}", id, mapper.getTableInfo().tableName());
+                deleteFromCache(id);
+            }
+            return result;
         } catch (SQLException e) {
             logger.warn("Error al eliminar el registro con ID {} de la tabla {}", id, mapper.getTableInfo().tableName(), e);
-            throw new DataAccessException(String.format("Error al eliminar el registro con ID %d", id), e);
+            throw new DataAccessException("Error al eliminar el registro con ID %d".formatted(id), e);
         }
     }
 
@@ -149,10 +198,13 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             PreparedStatement pstmt = conn.prepareStatement(sql);
         ) {
             mapper.EntityToParams(pstmt, entity);
-            pstmt.executeUpdate();
+            if(pstmt.executeUpdate()> 0) {
+                logger.info("Registro con ID {} insertado en la tabla {}", entity.getId(), mapper.getTableInfo().tableName());
+                putInCache(entity);
+            }
         } catch (SQLException e) {
             logger.warn("Error al insertar el registro con ID {} de la tabla {}", entity.getId(), mapper.getTableInfo().tableName(), e);
-            throw new DataAccessException(String.format("Error al insertar el registro con ID %d", entity.getId()), e);
+            throw new DataAccessException("Error al insertar el registro con ID %d".formatted(entity.getId()), e);
         }
     }
 
@@ -165,10 +217,15 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             PreparedStatement pstmt = conn.prepareStatement(sql);
         ) {
             mapper.EntityToParams(pstmt, entity);
-            return pstmt.executeUpdate() > 0;
+            boolean result = pstmt.executeUpdate() > 0;
+            if(result) {
+                logger.info("Registro con ID {} actualizado en la tabla {}", entity.getId(), mapper.getTableInfo().tableName());
+                putInCache(entity);
+            }
+            return result;
         } catch (SQLException e) {
             logger.warn("Error al actualizar el registro con ID {} de la tabla {}", entity.getId(), mapper.getTableInfo().tableName(), e);
-            throw new DataAccessException(String.format("Error al actualizar el registro con ID %d", entity.getId()), e);
+            throw new DataAccessException("Error al actualizar el registro con ID %d".formatted(entity.getId()), e);
         }
     }
 
@@ -182,10 +239,19 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         ) {
             pstmt.setLong(1, newId);
             pstmt.setLong(2, oldId);
-            return pstmt.executeUpdate() > 0;
+            boolean result = pstmt.executeUpdate() > 0;
+            if(result) {
+                logger.info("ID del registro actualizado de {} a {} en la tabla {}", oldId, newId, mapper.getTableInfo().tableName());
+                T entity = deleteFromCache(oldId);
+                if(entity != null) {
+                    entity.setId(newId);
+                    putInCache(entity);
+                }
+            }
+            return result;
         } catch (SQLException e) {
             logger.warn("Error al actualizar el ID del registro de {} a {} en la tabla {}", oldId, newId, mapper.getTableInfo().tableName(), e);
-            throw new DataAccessException(String.format("Error al actualizar el ID del registro de %d a %d", oldId, newId), e);
+            throw new DataAccessException("Error al actualizar el ID del registro de %d a %d".formatted(oldId, newId), e);
         }
     }
 }

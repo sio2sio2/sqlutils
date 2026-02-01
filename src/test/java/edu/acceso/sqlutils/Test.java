@@ -8,7 +8,6 @@ import java.util.stream.Stream;
 
 import org.slf4j.LoggerFactory;
 
-import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import edu.acceso.sqlutils.backend.Conexion;
 import edu.acceso.sqlutils.errors.DataAccessException;
@@ -19,17 +18,11 @@ public class Test {
     private static Logger logger = (Logger) LoggerFactory.getLogger(Test.class);
     private static final DateTimeFormatter df = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-    @SuppressWarnings("unused")
     public static void main(String[] args) {
         Config config = Config.create(args);
 
-        // De estas librerías externas no queremos mensajes de depuración.
-        Logger reflectionLogger = (Logger) LoggerFactory.getLogger("org.reflections");
-        Logger hikariLogger = (Logger) LoggerFactory.getLogger("com.zaxxer.hikari");
-        reflectionLogger.setLevel(Level.WARN);
-        hikariLogger.setLevel(Level.WARN);
-
-        logger.debug("Nivel de los registros de org.reflections establecido a {}", reflectionLogger.getLevel());
+        Logger packageLogger = (Logger) LoggerFactory.getLogger(Test.class.getPackageName());
+        packageLogger.setLevel(config.getLogLevel());
 
         Conexion conexion;
         try {
@@ -87,7 +80,7 @@ public class Test {
             });
         }
         catch(DataAccessException err) {
-            System.err.printf("No puede actualizarse el estudiante", err.getMessage());
+            System.err.printf("No puede actualizarse el estudiante: %s.\n", err.getMessage());
             System.exit(1);
         }
 
@@ -104,7 +97,7 @@ public class Test {
             });
         }
         catch(Exception err) {
-            System.err.printf("No se actualizan nombres de estudiantes: %s\n", err.getMessage());
+            System.err.printf("No se actualizan nombres de estudiantes: %s.\n", err.getMessage());
         }
 
         // Comprobación de que ningún estudiante se actualizó

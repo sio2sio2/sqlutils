@@ -12,13 +12,14 @@ public enum LoaderFactory {
     LAZY(LazyLoader.class);
 
     /** Clase del cargador de relaciones. */
+    @SuppressWarnings("rawtypes")
     private Class<? extends RelationLoader> loaderClass;
 
     /**
      * Constructor de la fábrica de cargadores de relaciones.
      * @param loaderClass Clase del cargador de relaciones.
      */
-    LoaderFactory(Class<? extends RelationLoader> loaderClass) {
+    LoaderFactory(@SuppressWarnings("rawtypes") Class<? extends RelationLoader> loaderClass) {
         this.loaderClass = loaderClass;
     }
 
@@ -26,6 +27,7 @@ public enum LoaderFactory {
      * Obtiene el cargador de relaciones correspondiente.
      * @return  La clase del cargador de relaciones seleccionado.
      */
+    @SuppressWarnings("rawtypes")
     public Class<? extends RelationLoader> getLoaderClass() {
         return loaderClass;
     }

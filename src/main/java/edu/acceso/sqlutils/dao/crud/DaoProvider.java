@@ -6,7 +6,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Proveedor de DAOs que proporciona una implementación de las operaciones CRUD y una definición de las consultas SQL.
  * Permite configurar qué clase se usará para definir las operaciones CRUD. En previsión de que un SGBD obligue a definir
- * de distinto modo una determinada sentencia SQL las cadenas que definen las sentencias SQL se independizan en una clase
+ * de distinto modo una determinada sentencia SQL, las cadenas que definen las sentencias SQL se independizan en una clase
  * separada.
  */
 public class DaoProvider {

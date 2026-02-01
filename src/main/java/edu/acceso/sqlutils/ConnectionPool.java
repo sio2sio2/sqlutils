@@ -56,6 +56,7 @@ public class ConnectionPool implements AutoCloseable {
      * @param dbUrl URL de conexión a la base de datos.
      * @param user Usuario de conexión
      * @param password Contraseña de conexión
+     * @return La instancia solicitada.
      * @throws IllegalStateException Si la instancia ya existe.
      */
     public static ConnectionPool create(String key, String dbUrl, String user, String password) {
@@ -78,7 +79,8 @@ public class ConnectionPool implements AutoCloseable {
 
     /**
      * Genera una instancia {@link ConnectionPool} cuando no son necesarios usuario ni contraseña.
-     * @param url La URL de conexión.
+     * @param key Clave que identifica la conexión.
+     * @param dbUrl La URL de conexión.
      * @return La instancia solicitada.
      */
     public static ConnectionPool create(String key, String dbUrl) {
@@ -87,6 +89,7 @@ public class ConnectionPool implements AutoCloseable {
 
     /**
      * Obtiene la instancia asociada a una clave.
+     * @param key Clave que identifica la conexión.
      * @return La instancia solicitada.
      * @throws IllegalArgumentException Si no existe la instancia para la clave suministrada.
      */
@@ -105,10 +108,16 @@ public class ConnectionPool implements AutoCloseable {
         }
     }
 
+    /** Comprueba si el pool de conexiones está abierto
+     * @return {@code true} si el pool está abierto, {@code false} en caso contrario
+     */
     public boolean isOpen() {
         return !closed.get() && !ds.isClosed();
     }
 
+    /** Obtiene el DataSource asociado al pool de conexiones
+     * @return El DataSource asociado
+     */
     public DataSource getDataSource() {
         return ds;
     }

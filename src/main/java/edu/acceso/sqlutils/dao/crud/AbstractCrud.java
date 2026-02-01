@@ -10,13 +10,14 @@ import edu.acceso.sqlutils.crud.MinimalCrudInterface;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.mapper.SqlTypesTranslator;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
+import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.tx.TransactionManager;
 
 /** 
- * Clase que implementa las operaciones CRUD para una entidad genérica T.
- * @param <T> Tipo de entidad que extiende {@link Entity}.
+ * Clase que implementa las operaciones CRUD para una entidad genérica E.
+ * @param <E> Tipo de entidad que extiende {@link Entity}.
  */
-public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInterface<T> {
+public abstract class AbstractCrud<E extends Entity> implements MinimalCrudInterface<E> {
     public static final Logger logger = LoggerFactory.getLogger(AbstractCrud.class);
 
     protected final TransactionManager tm;
@@ -24,19 +25,23 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
     /** Clase que implementa las sentencias SQL para las operaciones CRUD. */
     protected final MinimalSqlQuery sqlQuery;
     /**
-     * Mapper de la entidad T que mapea registros de la base de datos a objetos de tipo T.
-     * Este mapper es responsable de convertir filas de ResultSet en instancias de T y viceversa.
+     * Mapper de la entidad E que mapea registros de la base de datos a objetos de tipo E.
+     * Este mapper es responsable de convertir filas de ResultSet en instancias de E y viceversa.
      */
-    protected final EntityMapper<T> mapper;
+    protected final EntityMapper<E> mapper;
     /**
      * Mappers de entidades.
      */
     protected final Map<Class<? extends Entity>, EntityMapper<?>> mappers;
-    /**
-     * Cargador de relaciones que se utiliza para cargar entidades relacionadas.
-     * Este cargador es responsable de manejar las relaciones entre entidades y cargar datos adicionales según sea necesario.
-     */
-    protected final RelationLoader loader;
+
+    /** Clase que implementa los cargadores de relaciones. */
+    protected final Class<? extends RelationLoader<? extends Entity>> loaderClass;
+
+    /** Cargador de relaciones que originó este DAO. Es nulo si el DAO no se creo a partir de uno. */
+    protected final RelationLoader<? extends Entity> originalLoader;
+
+    /** Clase de la entidad que maneja este objeto DAO */
+    protected final Class<E> entityClass;
 
     /**
      * Constructor que recibe una clave y una clase que implementa {@link MinimalSqlQuery}.
@@ -47,19 +52,18 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
      * @param loaderClass La clase que implementa el cargador de relaciones.
      */
     @SuppressWarnings("unchecked")
-    public AbstractCrud(String key, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
-                        Class<? extends MinimalSqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
+    public AbstractCrud(String key, Class<E> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
+                        Class<? extends MinimalSqlQuery> sqlQueryClass, Class<? extends RelationLoader<? extends Entity>> loaderClass) {
         this.tm = TransactionManager.get(key);
         this.mappers = mappers;
-        this.mapper = (EntityMapper<T>) mappers.get(entityClass);
+        this.entityClass = entityClass;
+        this.mapper = (EntityMapper<E>) mappers.get(entityClass);
         if (mapper == null) {
             throw new IllegalArgumentException(String.format("La entidad %s no está registrada", entityClass.getSimpleName()));
         }
         this.sqlQuery = createSqlQueryInstance(sqlQueryClass, mapper);
-        // TODO:: Revisar esto. Un mismo DAO puede usarse para cargar dos entidades sin relación entre ellas.
-        // Por ejemplo, la obtención de dos estudiantes. Estos dos estudiantes comparten el mismo DAO y, por tanto,
-        // el mismo RelationLoader, pero no deberían esto último puesto que entonces comparten el historial de entidades cargadas.
-        this.loader = createRelationLoaderInstance(loaderClass);
+        this.loaderClass = loaderClass;
+        this.originalLoader = null;
         logger.debug("Creado DAO para '{}' con '{}', con operaciones '{}[{}]' y usando como estrategia para carga de entidades foráneas '{}'.",
             entityClass.getSimpleName(),
             mapper.getClass().getSimpleName(),
@@ -70,45 +74,68 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
     }
 
     /**
-     * Constructor que crea una nueva instancia de {@link AbstractCrud} a partir de otro {@link AbstractCrud}.
+     * Constructor que crea una nueva instancia de {@link AbstractCrud} a partir de un objeto {@link RelationLoader}.
      * 
      * <p>
-     * Un {@link AbstractCrud} obtenido de este modo comparte el cargador de relaciones (véase
-     * {@link RelationLoader}) con el original, lo que permite que éste conserve el historial
-     * de todas las relaciones cargadas.
+     * Este objeto {@link AbstractCrud} se construye compartiendo los mismos parámeros que el DAO original
+     * que creó el {@link RelationLoader} que se le pasa como argumento. Esto permite conocer
+     * cuál es el historial de entidades cargadas y evitar ciclos de referencia.
      * </p>
-     * @param <E> Tipo de entidad del {@link AbstractCrud} original.
-     * @param dao El {@link AbstractCrud} original a partir del cual se obtiene el nuevo.
-     * @param entityClass La clase de la entidad que maneja el nuevo {@link AbstractCrud}.
+     * @param originalDao DAO original a partir del cual se crea este nuevo DAO.
+     * @param rl {@link RelationLoader} que origina este DAO.
      */
     @SuppressWarnings("unchecked")
-    public <E extends Entity> AbstractCrud(AbstractCrud<E> dao, Class<T> entityClass) {
-        tm = dao.tm;
-        mappers = dao.mappers;
-        mapper = (EntityMapper<T>) mappers.get(entityClass);
+    public AbstractCrud(AbstractCrud<? extends Entity> originalDao, RelationLoader<E> rl) {
+        tm = originalDao.tm;
+        mappers = originalDao.mappers;
+        this.entityClass = rl.getEntityClass();
+        mapper = (EntityMapper<E>) mappers.get(entityClass);
         if (mapper == null) {
             throw new IllegalArgumentException(String.format("La entidad %s no está registrada", entityClass.getSimpleName()));
         }
-        sqlQuery = createSqlQueryInstance(dao.sqlQuery.getClass(), mapper);
-        loader = dao.loader;
+        sqlQuery = createSqlQueryInstance(originalDao.sqlQuery.getClass(), mapper);
+        loaderClass = originalDao.loaderClass;
+        originalLoader = rl;
         logger.atTrace()
-            .setMessage("Creado DAO de '{}' para cargarlo como entidad foránea de una entidad '{}'.")
+            .setMessage("Creado DAO de '{}' para cargar entidad foránea.")
             .addArgument(entityClass.getSimpleName())
-            .addArgument(() -> dao.getEntityClass().getSimpleName())
             .log();
     }
 
     /**
-     * Crea una instancia de RelationLoader utilizando la clase proporcionada.
-     * @param loaderClass La clase que implementa RelationLoader.
-     * @return Una instancia de RelationLoader.
+     * Crea una instancia de {@link RelationLoader}.
+     * @param <T> Tipo de entidad que el RelationLoader se encargará de cargar.
+     * @param entityClass Clase de la entidad que el {@link RelationLoader} se encargará de cargar.
+     * @return La instancia solicitada.
+     * @throws DataAccessException Si ocurre un error al crear la instancia.
      */
-    private RelationLoader createRelationLoaderInstance(Class<? extends RelationLoader> loaderClass) {
+    @SuppressWarnings("unchecked")
+    public <T extends Entity> RelationLoader<T> createNewRelationLoader(Class<T> entityClass) throws DataAccessException {
         try {
-            return loaderClass.getConstructor(AbstractCrud.class)
-                .newInstance(this);
+            return originalLoader == null
+                 ? (RelationLoader<T>) loaderClass.getConstructor(AbstractCrud.class, Class.class).newInstance(this, entityClass)
+                 : (RelationLoader<T>) loaderClass.getConstructor(RelationLoader.class, Class.class).newInstance(originalLoader, entityClass);
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Error al crear instancia de RelationLoader", e);
+        }
+    }
+
+    /**
+     * Obtiene un DAO con las mismas características que el DAO original,
+     * pero para otra tipo de entidad. Los cargadores de arranque que puede
+     * crear esta entidad tiene como cargador previo el cargador que originó este DAO.
+     * @param <T> Clase de la entidad que el cargador se encargará de cargar.
+     * @param rl Cargador de relaciones que originará el nuevo DAO
+     * @return El DAO solicitado.
+     * @throws DataAccessException Si ocurre un error al generar el DAO
+     */
+    @SuppressWarnings("unchecked")
+    public <T extends Entity> AbstractCrud<T> createLinkedDao(RelationLoader<T> rl) throws DataAccessException {
+        try {
+            return getClass().getDeclaredConstructor(getClass(), RelationLoader.class)
+                .newInstance(this, rl);
+        } catch (ReflectiveOperationException e) {
+            throw new DataAccessException(String.format("No se pudo obtener el DAO para la entidad %s", rl.getEntityClass().getSimpleName()), e);
         }
     }
 
@@ -133,8 +160,8 @@ public abstract class AbstractCrud<T extends Entity> implements MinimalCrudInter
      * Obtiene la clase de la entidad manejada por este objeto DAO.
      * @return La clase de la entidad relacionada.
      */
-    public Class<? extends Entity> getEntityClass() {
-        return mapper.getEmptyEntity().getClass();
+    public Class<E> getEntityClass() {
+        return entityClass;
     }
 
     /**

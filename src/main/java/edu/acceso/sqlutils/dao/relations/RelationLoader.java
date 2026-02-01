@@ -1,9 +1,5 @@
 package edu.acceso.sqlutils.dao.relations;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,166 +9,133 @@ import edu.acceso.sqlutils.errors.DataAccessException;
 
 /**
  * Cargador de relaciones.
- * Proporciona métodos comunes para cargar entidades relacionadas y gestionar ciclos de referencia.
+ * Proporciona métodos comunes para cargar entidades relacionadas.
  * 
- * <p>
- * Básicamente implementa el historial de entidades cargadas para evitar ciclos y define un método 
- * {@link #getDao(Class)} para obtener un nuevo DAO que comparte el mismo cargador de relaciones.
+ * @param <E> Tipo de entidad que este cargador se encargará de cargar.
+ * 
+ * <p>Contiene una referencia al cargador de relaciones previo que originó el DAO que creó este cargador.
+ * De este modo, se puede mantener un historial de entidades cargadas para detectar ciclos infinitos.</p>
  */
-public abstract class RelationLoader {
+public abstract class RelationLoader<E extends Entity> {
     private static final Logger logger = LoggerFactory.getLogger(RelationLoader.class);
 
-    /** DAO a partir de cual se crea el cargador. */
-    protected final AbstractCrud<? extends Entity> originalDao;
-    /** Historial de entidades cargadas para evitar duplicados. */
-    protected final List<RelationEntity<? extends Entity>> historial = new ArrayList<>();
-    /** Primera RelationEntity del ciclo, si existe. */
-    protected RelationEntity<? extends Entity> loopBeginning = null;
+    /** DAO que permite cargar la entidad que maneja este cargador de relaciones */
+    protected final AbstractCrud<E> dao;
+    /** Cargador de relaciones que cargó la entidad que usa este cargador */
+    protected final RelationLoader<? extends Entity> previous;
+
+    /** Entidad que carga este cargador */
+    protected RelationEntity<E> rl;
+
+    /** Clase de la entidad que carga este cargador de relaciones */
+    protected final Class<E> entityClass;
 
     /**
-     * Constructor.
+     * Construye un nuevo cargador de relaciones a partir de un DAO.
      * 
-     * @param dao DAO a partir del cual se crea el cargador de relaciones
+     * @param originalDao DAO a partir del cual se crea el cargador de relaciones
+     * @param entityClass Clase de la entidad que carga este cargador de relaciones
      */
-    public RelationLoader(AbstractCrud<? extends Entity> dao) {
-        this.originalDao = dao;
-        logger.debug("Creado cargador de relaciones para DAO de una entidad '{}'", 
-            dao.getEntityClass().getSimpleName());
+    public RelationLoader(AbstractCrud<? extends Entity> originalDao, Class<E> entityClass) throws DataAccessException {
+        this.entityClass = entityClass;
+        previous = null;
+        dao = originalDao.createLinkedDao(this);
+        logger.debug("Creado cargador de relaciones para una entidad '{}' a partir de un DAO para una entidad '{}'", 
+            entityClass.getSimpleName(), originalDao.getEntityClass().getSimpleName());
+    }
+
+    /**
+     * Construye un nuevo cargador de relaciones a partir de otro previo.
+     * @param previous Cargador de relaciones previo
+     * @param entityClass Clase de la entidad que carga este cargador de relaciones
+     */
+    public RelationLoader(RelationLoader<? extends Entity> previous, Class<E> entityClass) throws DataAccessException {
+        this.entityClass = entityClass;
+        this.previous = previous;
+        this.dao = previous.getDao().createLinkedDao(this);
+        logger.debug("Creado cargador de relaciones para una entidad '{}' a partir de otro para una entidad '{}'", 
+            entityClass.getSimpleName(), previous.getEntityClass().getSimpleName());
     }
 
     /**
      * Carga la entidad correspondiente a una clave foránea.
      * 
-     * @param <T> Clase de la entidad
-     * @param entityClass Clase de la entidad
      * @param id Clave foránea que identifica la entidad o {@code null} si no hay relación.
      * @return Entidad cargada o {@code null} si no hay relación
      * @throws DataAccessException Si ocurre un error al acceder a los datos
      */
-    public abstract <T extends Entity> T loadEntity(Class<T> entityClass, Long id) throws DataAccessException;
+    public abstract E loadEntity(Long id) throws DataAccessException;
 
     /**
-     * Obtiene un DAO para la clase especificada a partir de otro DAO. La particularidad es que ambos
-     * comparten el mismo cargador de relaciones.
-     * @param <E> Clase de la entidad
-     * @param entityClass Clase de la entidad
-     * @return DAO para la entidad especificada
-     * @throws DataAccessException Si ocurre un error al generar el DAO
-     */
-    @SuppressWarnings("unchecked")
-    protected <E extends Entity> AbstractCrud<E> getDao(Class<E> entityClass) throws DataAccessException {
-        try {
-            return originalDao.getClass().getDeclaredConstructor(originalDao.getClass(), Class.class)
-                .newInstance(originalDao, entityClass);
-        } catch (ReflectiveOperationException e) {
-            throw new DataAccessException(String.format("No se pudo obtener el DAO para la entidad %s", entityClass.getSimpleName()), e);
-        }
-    }
-
-    /**
-     * Comprueba si la entidad es la primera de un ciclo. Además, apunta en loopBeginning
-     * cuál es esa primera entidad del ciclo en el historial.
+     * Comprueba si el cargador ya ha cargado la entidad asociada y, en caso de que no lo haya hecho.
+     * detecta si la entidad ya se había cargado por algún cargador previo.
      * 
      * @param relationEntity Entidad a comprobar
      * @return {@code true} si es la primera de un ciclo, {@code false} en caso contrario
      */
-    protected boolean isLoaded(RelationEntity<? extends Entity> relationEntity) {
-        if(historial.isEmpty() || relationEntity == null) return false;
+    @SuppressWarnings("unchecked")
+    protected boolean checkAlreadyLoaded() {
+        RelationEntity<E> relationEntity = this.getRl();
+        RelationLoader<? extends Entity> previous = this.previous;
 
-        if(loopBeginning == null) {
-            // ¿Está relationEntity ya en el historial? Lo apuntamos en ese caso.
-            int idx = historial.indexOf(relationEntity);
-            if(idx >= 0) {
-                loopBeginning = historial.get(idx);
-                logger.debug("Detectado ciclo de referencias comenzando en la entidad '{}' con ID {}", 
-                    loopBeginning.getEntityClass().getSimpleName(), loopBeginning.getId());
+        if(isAlreadyLoaded()) return true;
+
+        while(previous != null) {
+            if(relationEntity.equals(previous.getRl())) {
+                relationEntity.setLoadedEntity((E) previous.getRl().getLoadedEntity());
+                logger.debug("Detectado ciclo de referencias para la entidad '{}' con ID {}", 
+                    relationEntity.getEntityClass().getSimpleName(), relationEntity.getId());
+                return true;
             }
+            previous = previous.previous;
         }
 
-        return relationEntity.equals(loopBeginning);
+        return false;
     }
 
     /**
-     * Obtiene la primera entidad del ciclo, si existe.
-     * 
-     * @return Primera entidad del ciclo o {@code null} si no hay ciclo
+     * Informa de si el cargador ya cargó la entidad asociada.
+     * @return {@code true} si la entidad ya ha sido cargada, {@code false} en caso contrario
      */
-    public RelationEntity<? extends Entity> getLoopBeginning() {
-        return loopBeginning;
+    protected boolean isAlreadyLoaded() {
+        RelationEntity<E> relationEntity = this.getRl();
+        return relationEntity.getLoadedEntity() != null;
     }
 
     /**
-     * Registra una entidad en el historial de entidades cargadas.
+     * Establece la entidad asociada a este cargador de relaciones.
      * 
-     * @param entity Entidad a registrar
+     * @param id ID de la entidad
      */
-    protected void registrar(RelationEntity<? extends Entity> entity) {
-        historial.add(entity);
-        logger.trace("Registrada entidad '{}' con ID {} en el historial de relaciones", 
-            entity.getEntityClass().getSimpleName(), entity.getId());
+    protected void setRl(Long id) {
+        this.rl = new RelationEntity<>(dao.getEntityClass(), id);
     }
 
     /**
-     * Clase interna que representa una entidad relacionada.
-     * Contiene la clase de la entidad, su ID y la entidad cargada.
+     * Obtiene la entidad asociada a este cargador de relaciones.
      * 
-     * @param <E> Tipo de entidad
+     * @return La entidad solicitada.
      */
-    protected static class RelationEntity<E extends Entity> {
-        /** Clase de la entidad. */
-        private final Class<E> entityClass;
-        /** ID de la entidad. */
-        private final Long id;
-        /** Entidad cargada. Puede ser {@code null} si no se ha cargado aún. */
-        private E loadedEntity;
+    protected RelationEntity<E> getRl() {
+        if(rl == null) throw new IllegalStateException("No se ha establecido la entidad asociada a este cargador de relaciones.");
+        return rl;
+    }
 
-        /**
-         * Constructor de la entidad relacionada.
-         * 
-         * @param entityClass Clase de la entidad
-         * @param id ID de la entidad
-         */
-        public RelationEntity(Class<E> entityClass, Long id) {
-            this.entityClass = entityClass;
-            this.id = id;
-        }
+    /**
+     * Obtiene el DAO original a partir del cual se creó este cargador de relaciones.
+     * 
+     * @return DAO original
+     */
+    public AbstractCrud<? extends Entity> getDao() {
+        return dao;
+    }
 
-        /** Obtiene la clase de la entidad. */
-        public Class<E> getEntityClass() {
-            return entityClass;
-        }
-
-        /** Obtiene el ID de la entidad. */
-        public Long getId() {
-            return id;
-        }
-
-        /** Obtiene la entidad cargada. Puede ser {@code null} si no se ha cargado aún. */
-        public E getLoadedEntity() {
-            return loadedEntity;
-        }
-
-        /** Establece la entidad cargada. */
-        public void setLoadedEntity(E loadedEntity) {
-            this.loadedEntity = loadedEntity;
-        }
-
-        /** 
-         * Compara dos objetos RelationEntity.
-         * Dos RelationEntity son iguales si tienen la misma clase de entidad y el mismo ID.
-         * @param obj Objeto a comparar
-         * @return {@code true} si son iguales, {@code false} en caso contrario
-         */
-        @Override
-        public boolean equals(Object obj) {
-            if(this == obj) return true;
-            if(!(obj instanceof RelationEntity that)) return false;
-            return entityClass.equals(that.entityClass) && id.equals(that.id);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(entityClass, id);
-        }
+    /**
+     * Obtiene la clase de la entidad que carga este cargador de relaciones.
+     * 
+     * @return Clase de la entidad
+     */
+    public Class<E> getEntityClass() {
+        return entityClass;
     }
 }

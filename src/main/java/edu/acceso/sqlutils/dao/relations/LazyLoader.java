@@ -14,32 +14,34 @@ import javassist.util.proxy.ProxyObject;
 
 /**
  * Cargador perezoso de relaciones. Carga las relaciones de una entidad bajo demanda, es decir, cuando se accede a ellas.
+ * @param <E> Tipo de entidad que cargará el cargador de relaciones.
  */
-public class LazyLoader extends RelationLoader {
+public class LazyLoader<E extends Entity> extends RelationLoader<E> {
     private static final Logger logger = LoggerFactory.getLogger(LazyLoader.class);
 
     /**
      * Constructor.
-     * @param dao DAO a partir del cual se crea el cargador de relaciones
+     * @param originalDao DAO a partir del cual se crea el cargador de relaciones
+     * @param entityClass Clase de la entidad que carga este cargador de relaciones
      */
-    public LazyLoader(AbstractCrud<? extends Entity> dao) {
-        super(dao);
+    public LazyLoader(AbstractCrud<? extends Entity> originalDao, Class<E> entityClass) throws DataAccessException {
+        super(originalDao, entityClass);
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <E extends Entity> E loadEntity(Class<E> entityClass, Long id) throws DataAccessException {
+    public E loadEntity(Long id) throws DataAccessException {
         // Si no hay relación, no es necesario cargar nada.
         if(id == null) return null;
 
-        // Si la entidad ya se cargó (ciclo), se devuelve directamente.
-        // (Lo evitamos para evitar devolver información obsoleta)
-        // RelationEntity<E> relationEntity = new RelationEntity<>(entityClass, id);
-        // if(isLoaded(relationEntity)) return (E) getLoopBeginning().getLoadedEntity();
+        // Establecemos el RelationEntity asoaciado a este cargador
+        setRl(id);
+
+        if(checkAlreadyLoaded()) return (E) getRl().getLoadedEntity();
 
         // Factoría efímera de proxies
         ProxyFactory factory = new ProxyFactory();
-        factory.setSuperclass(entityClass);
+        factory.setSuperclass(getEntityClass());
 
         Class<?> proxyClass = factory.createClass();
 
@@ -49,10 +51,10 @@ public class LazyLoader extends RelationLoader {
             proxyInstance = (E) proxyClass.getDeclaredConstructor().newInstance();
         }
         catch (ReflectiveOperationException e) {
-            throw new DataAccessException(String.format("Error al crear proxy para la entidad %s. ¿Tiene un constructor sin argumentos?", entityClass.getSimpleName()), e);
+            throw new DataAccessException("Error al crear proxy para la entidad %s. ¿Tiene un constructor sin argumentos?".formatted(getEntityClass().getSimpleName()), e);
         }
 
-        MethodHandler handler = new LazyMethodHandler<>(entityClass, id, this);
+        MethodHandler handler = new LazyMethodHandler<>(getEntityClass(), id, this);
         ((ProxyObject) proxyInstance).setHandler(handler);
 
         return proxyInstance;
@@ -74,15 +76,15 @@ public class LazyLoader extends RelationLoader {
         /** ID de la entidad relacionada (clave foránea en la entidad principal) */
         private final Long id;
         /** Cargador de relaciones */
-        private final RelationLoader loader;
+        private final RelationLoader<E> loader;
 
-        /** Entidad relacionada que se carga de forma perezosa y se almacena para que futuros acceso a la entidad no supongan una nueva carga */
+        /** Entidad relacionada que se carga de forma perezosa y se almacena para que futuros accesos a la entidad no supongan una nueva carga */
         private E realEntity = null;
 
-        public LazyMethodHandler(Class<E> entityClass, Long id, RelationLoader loader) {
+        public LazyMethodHandler(Class<E> entityClass, Long id, RelationLoader<E> loader) {
             if(id == null) throw new IllegalArgumentException("ID no puede ser nulo para LazyLoader. Si la clave foránea es nula, no use cargador.");
 
-            this.entityClass = entityClass;;
+            this.entityClass = entityClass;
             this.id = id;
             this.loader = loader;
         }
@@ -100,13 +102,10 @@ public class LazyLoader extends RelationLoader {
         @Override
         public Object invoke(Object self, Method method, Method proceed, Object[] args) throws Throwable {
             if(!isLoaded()) {
-                AbstractCrud<E> dao = loader.getDao(entityClass);
-                realEntity = dao.get(id).orElseThrow(
+                realEntity = loader.dao.get(id).orElseThrow(
                     () -> new DataAccessException(String.format("Error de integridad referencial: no se encontró la entidad %s con ID %d", entityClass.getSimpleName(), id))
                 );
-                RelationEntity<E> relationEntity = new RelationEntity<>(entityClass, id);
-                relationEntity.setLoadedEntity(realEntity);
-                loader.registrar(relationEntity);
+                loader.getRl().setLoadedEntity(realEntity);
                 logger.debug("Entidad '{}' con ID {} cargada de forma perezosa.", entityClass.getSimpleName(), id);
             }
             return method.invoke(realEntity, args);

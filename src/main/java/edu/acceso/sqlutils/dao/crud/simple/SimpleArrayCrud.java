@@ -15,8 +15,6 @@ import edu.acceso.sqlutils.errors.DataAccessException;
  * */
 public class SimpleArrayCrud<T extends Entity> extends SimpleCrud<T> {
 
-    private final Class<T> entityClass;
-
     /**
      * Constructor que recibe un clave identificativa y una clase que implementa {@link SimpleSqlQuery}.
      * @param key Clave que identifica la fuente de datos.
@@ -26,26 +24,23 @@ public class SimpleArrayCrud<T extends Entity> extends SimpleCrud<T> {
      * @param loaderClass Clase que implementa {@link RelationLoader}.
      */
     public SimpleArrayCrud(String key, Class<T> entityClass, Map<Class<? extends Entity>, EntityMapper<?>> mappers,
-                      Class<? extends SimpleSqlQuery> sqlQueryClass, Class<? extends RelationLoader> loaderClass) {
+                      Class<? extends SimpleSqlQuery> sqlQueryClass, Class<? extends RelationLoader<? extends Entity>> loaderClass) {
         super(key, entityClass, mappers, sqlQueryClass, loaderClass);
-        this.entityClass = entityClass;
     }
 
     /**
      * Constructor que crea una nueva instancia de {@link SimpleArrayCrud} a partir de otro {@link SimpleArrayCrud}.
      * 
      * <p>
-     * Un {@link SimpleArrayCrud} obtenido de este modo comparte el cargador de relaciones (véase
-     * {@link RelationLoader}) con el original, lo que permite que éste conserve el historial
-     * de todas las relaciones cargadas.
+     * Este objeto {@link SimpleArrayCrud} se construye compartiendo los mismos parámeros que el DAO original
+     * que creó el {@link RelationLoader} que se le pasa como argumento. Esto permite conocer
+     * cuál es el historial de entidades cargadas y evitar ciclos de referencia.
      * </p>
-     * @param <E> Tipo de entidad del {@link SimpleArrayCrud} original.
-     * @param dao El {@link SimpleArrayCrud} original a partir del cual se obtiene el nuevo.
-     * @param entityClass La clase de la entidad que maneja el nuevo {@link SimpleCrud}.
+     * @param originalDao DAO original del que se crea este nuevo DAO.
+     * @param rl {@link RelationLoader} que origina este DAO.
      */
-    public <E extends Entity> SimpleArrayCrud(SimpleArrayCrud<E> dao, Class<T> entityClass) {
-        super(dao, entityClass);
-        this.entityClass = entityClass;
+    public SimpleArrayCrud(SimpleArrayCrud<? extends Entity> originalDao, RelationLoader<T> rl) {
+        super(originalDao, rl);
     }
 
     @SuppressWarnings("unchecked")

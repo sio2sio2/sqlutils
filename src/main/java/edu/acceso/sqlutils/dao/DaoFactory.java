@@ -6,6 +6,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import edu.acceso.sqlutils.ConnectionPool;
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.dao.crud.AbstractCrud;
 import edu.acceso.sqlutils.dao.crud.DaoProvider;
@@ -13,6 +14,8 @@ import edu.acceso.sqlutils.dao.crud.simple.SimpleCrudInterface;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.relations.LoaderFactory;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
+import edu.acceso.sqlutils.dao.tx.DaoTransactionManager;
+import edu.acceso.sqlutils.tx.TransactionManager;
 
 /** 
  * Fábrica de DAOs que permite crear objetos DAO para realizar operaciones CRUD
@@ -31,7 +34,10 @@ public class DaoFactory {
     /** Proveedor de DAOs (que proporciona una implementación de las operaciones CRUD y una definición de las consultas SQL) */
     private final DaoProvider daoProvider;
     /** Clase que implementa el cargador de relaciones. */
-    private final Class<? extends RelationLoader> loaderClass;
+    private final Class<? extends RelationLoader<? extends Entity>> loaderClass;
+
+    /** Gestor de transacciones para DAOs */
+    private final DaoTransactionManager tm;
 
     /**
      * Constructor privado para la fábrica de DAOs.
@@ -40,12 +46,12 @@ public class DaoFactory {
      * @param loaderClass Clase que implementa el cargador de relaciones.
      * @param mappers Mapa de mappers de entidades.
      */
-    private DaoFactory(String key, DaoProvider daoProvider, Class<? extends RelationLoader> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
+    private DaoFactory(String key, ConnectionPool cp, DaoProvider daoProvider, Class<? extends RelationLoader<? extends Entity>> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
         this.key = key;
         this.daoProvider = daoProvider;
         this.loaderClass = loaderClass;
         this.mappers = mappers;
-        logger.debug("Creada DaoFactory '{}' para {} entidades que utilizan las operaciones definidas por '{}[{}]'.", key, mappers.size(), daoProvider.getCrudClass().getSimpleName(), daoProvider.getSqlQueryClass().getSimpleName());
+        this.tm = DaoTransactionManager.create(key, cp.getDataSource());
     }
 
     /**
@@ -80,6 +86,7 @@ public class DaoFactory {
 
         /**
          * Registra un {@link EntityMapper} para una entidad específica.
+         * @param <T> Tipo de entidad.
          * @param entityMapperClass La clase del objeto {@link EntityMapper} que se va a registrar.
          * @return La propia instancia de {@link DaoFactory} para permitir el encadenamiento de llamadas.
          */
@@ -98,19 +105,22 @@ public class DaoFactory {
 
         /**
          * Genera una nueva instancia de {@link DaoFactory}.
-         * @param ds Fuente de datos para obtener conexiones a la base de datos.
-         * @param loader Cargador de relaciones.
+         * @param key Clave que identifica la fuente de datos.
+         * @param cp Pool de conexiones.
+         * @param loader Fabrica de cargadores de relaciones.
          * @return Una nueva instancia de {@link DaoFactory}.
          */
-        public DaoFactory get(String key, LoaderFactory loader) {
-            return new DaoFactory(key, daoProvider, loader.getLoaderClass(), mappers);
+        public DaoFactory get(String key, ConnectionPool cp, LoaderFactory loader) {
+            @SuppressWarnings("unchecked")
+            var loaderClass = (Class<? extends RelationLoader<? extends Entity>> ) loader.getLoaderClass();
+            return new DaoFactory(key, cp, daoProvider, loaderClass, mappers);
         }
     }
 
     /**
      * Obtiene un objeto {@link SimpleCrudInterface} que permite realizar operaciones CRUD sobre una entidad específica.
-     * @param entityClass La clase de la entidad para la que se desea obtener el DAO.
      * @param <T> El tipo de la entidad.
+     * @param entityClass La clase de la entidad para la que se desea obtener el DAO.
      * @return Un objeto DAO para la entidad especificada.
      */
     @SuppressWarnings("unchecked")
@@ -121,5 +131,13 @@ public class DaoFactory {
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException(String.format("Error al crear la instancia de %s", daoProvider.getCrudClass().getSimpleName()), e);
         }
+    }
+
+    /**
+     * Obtiene el gestor de transacciones para DAOs.
+     * @return Gestor de transacciones para DAOs.
+     */
+    public TransactionManager getTransactionManager() {
+        return tm;
     }
 }

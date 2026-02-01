@@ -158,7 +158,7 @@ public class ConnectionWrapper implements InvocationHandler {
 
     /**
      * Indica si las conexiones obtenidas con este proveedor están pensadas para usarse con Streams.
-     * @return 
+     * @return {@code true} si la conexión es para Streams, {@code false} en caso contrario
      */
     public boolean isForStream() {
         return forStream;
