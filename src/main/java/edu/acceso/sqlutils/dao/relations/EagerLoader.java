@@ -50,15 +50,10 @@ public class EagerLoader<E extends Entity> extends RelationLoader<E> {
      */
     @SuppressWarnings("unchecked")
     @Override
-    public E loadEntity(Long id) throws DataAccessException {
-        if(id == null) return null; // Si no hay relación, no es necesario cargar nada.
-
-        // Establecemos el RelationEntity asoaciado a este cargador
-        setRl(id);
-
-        // Las referencias generan un ciclo infinito, así que devolvemos un proxy
-        // en vez de la entidad directamente para romper el bucle.
-        if(checkAlreadyLoaded()) {
+    protected E loadEntityNotPreviouslyLoaded(Long id) throws DataAccessException {
+        // Si las cargas repetidas generan un ciclo, devolvemos un proxy
+        // en vez de la entidad que ya apareció para romper el bucle.
+        if(isInHistory()) {
             // Factoría efímera de proxies
             ProxyFactory factory = new ProxyFactory();
             factory.setSuperclass(getEntityClass());
@@ -80,7 +75,7 @@ public class EagerLoader<E extends Entity> extends RelationLoader<E> {
             return proxyInstance;
         }
     
-        E entity = dao.get(id).orElse(null);   // <-- Aquí se carga la entidad relacionada.
+        E entity = dao.get(id).orElse(null);   // <-- Aquí se carga la entidad relacionada (que podría a su vez llamar a loadEntity).
         if(entity == null) throw new DataAccessException("Problema de integridad referencial. ID %d usando como clave foránea no existe".formatted(id));
 
         getRl().setLoadedEntity(entity);  // <-- Aquí se establece el valor de loadedEntity.

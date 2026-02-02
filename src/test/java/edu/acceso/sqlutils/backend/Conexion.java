@@ -97,7 +97,7 @@ public class Conexion {
         DaoFactory daoFactory = DaoFactory.Builder.create(daoProvider)
             .registerMapper(CentroMapper.class)
             .registerMapper(EstudianteMapper.class)
-            .get(DB_KEY, cp, LoaderFactory.EAGER);
+            .get(DB_KEY, cp, LoaderFactory.LAZY);
 
         instance = new Conexion(DB_KEY, cp, daoFactory)
             .inicializar(config.getInput());

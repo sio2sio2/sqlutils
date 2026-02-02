@@ -30,14 +30,9 @@ public class LazyLoader<E extends Entity> extends RelationLoader<E> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public E loadEntity(Long id) throws DataAccessException {
-        // Si no hay relación, no es necesario cargar nada.
-        if(id == null) return null;
-
-        // Establecemos el RelationEntity asoaciado a este cargador
-        setRl(id);
-
-        if(checkAlreadyLoaded()) return (E) getRl().getLoadedEntity();
+    protected E loadEntityNotPreviouslyLoaded(Long id) throws DataAccessException {
+        // Si no está cacheada, no puede estar en el historial de carga
+        // if(isInHistory()) return (E) getRl().getLoadedEntity();
 
         // Factoría efímera de proxies
         ProxyFactory factory = new ProxyFactory();
@@ -54,7 +49,7 @@ public class LazyLoader<E extends Entity> extends RelationLoader<E> {
             throw new DataAccessException("Error al crear proxy para la entidad %s. ¿Tiene un constructor sin argumentos?".formatted(getEntityClass().getSimpleName()), e);
         }
 
-        MethodHandler handler = new LazyMethodHandler<>(getEntityClass(), id, this);
+        MethodHandler handler = new LazyMethodHandler<>(this, id);
         ((ProxyObject) proxyInstance).setHandler(handler);
 
         return proxyInstance;
@@ -71,44 +66,34 @@ public class LazyLoader<E extends Entity> extends RelationLoader<E> {
      */
     private static class LazyMethodHandler<E extends Entity> implements MethodHandler {
 
-        /** Clase de la entidad relacionada */
-        private final Class<E> entityClass;
         /** ID de la entidad relacionada (clave foránea en la entidad principal) */
         private final Long id;
         /** Cargador de relaciones */
         private final RelationLoader<E> loader;
 
-        /** Entidad relacionada que se carga de forma perezosa y se almacena para que futuros accesos a la entidad no supongan una nueva carga */
-        private E realEntity = null;
-
-        public LazyMethodHandler(Class<E> entityClass, Long id, RelationLoader<E> loader) {
+        // TODO:: Simplificar a LazyMethodHandler(RelationLoader<E> loader, Long id)
+        public LazyMethodHandler(RelationLoader<E> loader, Long id) {
             if(id == null) throw new IllegalArgumentException("ID no puede ser nulo para LazyLoader. Si la clave foránea es nula, no use cargador.");
 
-            this.entityClass = entityClass;
             this.id = id;
             this.loader = loader;
         }
 
-        /**
-         * Comprueba si la entidad relacionada ya ha sido cargada.
-         * @return true si la entidad ya ha sido cargada, false en caso contrario
-         */
-        private boolean isLoaded() {
-            // La entidad cargada nunca puede ser nula, porque el identificador no puede ser nulo.
-            // Por consiguiente, que la entidad sea nula, indica que no se ha cargado aún.
-            return realEntity != null;
-        }
-
         @Override
         public Object invoke(Object self, Method method, Method proceed, Object[] args) throws Throwable {
-            if(!isLoaded()) {
-                realEntity = loader.dao.get(id).orElseThrow(
-                    () -> new DataAccessException(String.format("Error de integridad referencial: no se encontró la entidad %s con ID %d", entityClass.getSimpleName(), id))
-                );
-                loader.getRl().setLoadedEntity(realEntity);
-                logger.debug("Entidad '{}' con ID {} cargada de forma perezosa.", entityClass.getSimpleName(), id);
-            }
-            return method.invoke(realEntity, args);
+            return switch(method.getName()) {
+                case "getId" -> id;  // Para el ID no hace falta recuperar el objeto real.
+                default -> {
+                    if(!loader.isAlreadyLoaded()) {
+                        E realEntity = loader.dao.get(id).orElseThrow(
+                            () -> new DataAccessException(String.format("Error de integridad referencial: no se encontró la entidad %s con ID %d", loader.getEntityClass().getSimpleName(), id))
+                        );
+                        loader.getRl().setLoadedEntity(realEntity);
+                        logger.debug("Entidad '{}' con ID {} cargada de forma perezosa.", loader.getEntityClass().getSimpleName(), id);
+                    }
+                    yield method.invoke(loader.getRl().getLoadedEntity(), args);
+                }
+            };
         }
     }
 }

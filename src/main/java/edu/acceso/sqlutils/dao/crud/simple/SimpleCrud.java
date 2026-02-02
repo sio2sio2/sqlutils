@@ -74,32 +74,6 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         return entity;
     }
 
-    /**
-     * Almacena la entidad en la caché de la transacción actual.
-     * @param entity Entidad a almacenar.
-     */
-    protected T putInCache(T entity) {
-        ((DaoTransactionManager) tm).getCache().put(entity);
-        return entity;
-    }   
-
-    /**
-     * Elimina la entidad de la caché de la transacción actual.
-     * @param id ID de la entidad a eliminar.
-     * @return Entidad eliminada de la caché o {@code null} si no existía.
-     */
-    protected T deleteFromCache(Long id) {
-        return ((DaoTransactionManager) tm).getCache().delete(getEntityClass(), id);
-    }
-
-    /**
-     * Verifica que la transacción esté activa.
-     * @throws IllegalStateException Si el gestor de transacciones no tiene una transacción abierta.
-     */
-    private void checkTransactionActive() {
-        if (!tm.isActive()) throw new IllegalStateException("El gestor de transacciones {} no tiene una transacción abierta.".formatted(tm.getKey()));
-    }
-
     @Override
     public Optional<T> get(Long id) throws DataAccessException {
         final String sql = sqlQuery.getSelectIdSql();
@@ -119,7 +93,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
                 : Optional.empty();
         } catch (SQLException e) {
             logger.warn("Error al obtener el registro con ID {} de la tabla {}", id, mapper.getTableInfo().tableName(), e);
-            throw new DataAccessException(String.format("Error al obtener el registro con ID %d", id), e);
+            throw new DataAccessException("Error al obtener el registro con ID %d".formatted(id), e);
         }
     }
 

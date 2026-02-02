@@ -10,6 +10,8 @@ import edu.acceso.sqlutils.crud.MinimalCrudInterface;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.mapper.SqlTypesTranslator;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
+import edu.acceso.sqlutils.dao.tx.Cache;
+import edu.acceso.sqlutils.dao.tx.DaoTransactionManager;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.tx.TransactionManager;
 
@@ -162,6 +164,40 @@ public abstract class AbstractCrud<E extends Entity> implements MinimalCrudInter
      */
     public Class<E> getEntityClass() {
         return entityClass;
+    }
+
+    /**
+     * Verifica que la transacción esté activa.
+     * @throws IllegalStateException Si el gestor de transacciones no tiene una transacción abierta.
+     */
+    protected void checkTransactionActive() {
+        if (!tm.isActive()) throw new IllegalStateException("El gestor de transacciones '%s' no tiene una transacción abierta.".formatted(tm.getKey()));
+    }
+
+    /**
+     * Almacena la entidad en la caché de la transacción actual.
+     * @param entity Entidad a almacenar.
+     */
+    protected E putInCache(E entity) {
+        getCache().put(entity);
+        return entity;
+    }   
+
+    /**
+     * Elimina la entidad de la caché de la transacción actual.
+     * @param id ID de la entidad a eliminar.
+     * @return Entidad eliminada de la caché o {@code null} si no existía.
+     */
+    protected E deleteFromCache(Long id) {
+        return getCache().delete(getEntityClass(), id);
+    }
+
+    /**
+     * Obtiene la caché de la transacción actual.
+     * @return La caché de la transacción actual.
+     */
+    public Cache getCache() {
+        return ((DaoTransactionManager) tm).getCache();
     }
 
     /**

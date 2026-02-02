@@ -88,7 +88,7 @@ public class TransactionManager {
      * @throws IllegalStateException Si ya hay un gestor inicializado con la misma clave.
      */
     protected static void registerInstance(String key, TransactionManager tm) {
-        if(instances.putIfAbsent(key, tm) != null) throw new IllegalStateException("La conexión {} ya tenía creada un gestor de transacciones".formatted(key));
+        if(instances.putIfAbsent(key, tm) != null) throw new IllegalStateException("La conexión '%s' ya tenía creada un gestor de transacciones".formatted(key));
         else logger.debug("Creado gestor de transacciones para la conexión '{}'", key);
     }
 

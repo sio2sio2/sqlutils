@@ -64,7 +64,29 @@ public abstract class RelationLoader<E extends Entity> {
      * @return Entidad cargada o {@code null} si no hay relación
      * @throws DataAccessException Si ocurre un error al acceder a los datos
      */
-    public abstract E loadEntity(Long id) throws DataAccessException;
+    public E loadEntity(Long id) throws DataAccessException {
+        // Si no hay relación, no es necesario cargar nada.
+        if(id == null) return null;
+
+        // Establecemos el RelationEntity asoaciado a este cargador
+        setRl(id);
+
+        // Comprobamos si la entidad ya está en caché
+        E cachedEntity = dao.getCache().get(getEntityClass(), id);
+        if(cachedEntity != null) return cachedEntity;
+
+        // Como la entidad no se cargó anteriormente, la cargamos
+        // usando la estrategia concreta del cargador.
+        return loadEntityNotPreviouslyLoaded(id);
+    }
+
+    /**
+     * Termina de cargar la entidad relacionada, si no se encontraba ya en caché.
+     * @param id ID de la entidad relacionada.
+     * @return Entidad cargada.
+     * @throws DataAccessException Si ocurre un error al acceder a los datos
+     */
+    protected abstract E loadEntityNotPreviouslyLoaded(Long id) throws DataAccessException;
 
     /**
      * Comprueba si el cargador ya ha cargado la entidad asociada y, en caso de que no lo haya hecho.
@@ -74,7 +96,7 @@ public abstract class RelationLoader<E extends Entity> {
      * @return {@code true} si es la primera de un ciclo, {@code false} en caso contrario
      */
     @SuppressWarnings("unchecked")
-    protected boolean checkAlreadyLoaded() {
+    protected boolean isInHistory() {
         RelationEntity<E> relationEntity = this.getRl();
         RelationLoader<? extends Entity> previous = this.previous;
 
