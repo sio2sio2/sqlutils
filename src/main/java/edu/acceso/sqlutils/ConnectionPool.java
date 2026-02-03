@@ -123,7 +123,7 @@ public class ConnectionPool implements AutoCloseable {
     public DataSource getDataSource() {
         try {
             TransactionManager.get(key);
-            logger.warn("Hay un gestor de transacciones asociado a este ConnectionPool. A menos de que esté seguro de lo que hace, debería obtener las conexiones a través de él.");
+            logger.warn("Hay un gestor de transacciones asociado a este pool '%s'. A menos de que esté seguro de lo que hace, debería obtener las conexiones a través de él.".formatted(getKey()));
         } catch(IllegalStateException e) {}
 
         return ds;
@@ -157,7 +157,7 @@ public class ConnectionPool implements AutoCloseable {
         try {
             return TransactionManager.get(key);
         } catch(IllegalStateException e) {
-            throw new IllegalStateException("No hay un gestor de transacciones asociado a este ConnectionPool. Debe crearlo primero con setTransactionManager().");
+            throw new IllegalStateException("No hay un gestor de transacciones asociado al pool '%s'. Debe crearlo primero con setTransactionManager().".formatted(getKey()));
         }
     }
 

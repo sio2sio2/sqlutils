@@ -206,7 +206,7 @@ public class SqlUtils {
                 stmt.execute(sentencia);
                 logger.debug("Sentencia ejecutada: {}", sentencia);
             }
-            conn.commit();
+            if(originalAutoCommit) conn.commit();
         } catch(SQLException err) {
             logger.error("Error al ejecutar el script SQL, se revierten todas las sentencias ejecutadas.", err);
             try {
