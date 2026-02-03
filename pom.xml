@@ -6,7 +6,7 @@
     <artifactId>sqlutils</artifactId>
     <name>sqlutils</name>
     <description>Utilidades para el acceso a bases de datos SQL con JDBC</description>
-    <version>3.1.0</version>
+    <version>3.1.1</version>
 
     <developers>
         <developer>

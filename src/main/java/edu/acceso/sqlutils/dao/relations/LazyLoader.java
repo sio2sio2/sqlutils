@@ -71,7 +71,6 @@ public class LazyLoader<E extends Entity> extends RelationLoader<E> {
         /** Cargador de relaciones */
         private final RelationLoader<E> loader;
 
-        // TODO:: Simplificar a LazyMethodHandler(RelationLoader<E> loader, Long id)
         public LazyMethodHandler(RelationLoader<E> loader, Long id) {
             if(id == null) throw new IllegalArgumentException("ID no puede ser nulo para LazyLoader. Si la clave foránea es nula, no use cargador.");
 

@@ -63,7 +63,7 @@ public class Conexion {
      * @param ds Pool de conexiones a la base de datos.
      * @param daoFactory Fábrica de DAOs para acceder a las entidades del backend.
      */
-    private Conexion(String key, ConnectionPool cp, DaoFactory daoFactory) {
+    private Conexion(ConnectionPool cp, DaoFactory daoFactory) {
         this.daoFactory = daoFactory;
         this.cp = cp;
     }
@@ -97,9 +97,9 @@ public class Conexion {
         DaoFactory daoFactory = DaoFactory.Builder.create(daoProvider)
             .registerMapper(CentroMapper.class)
             .registerMapper(EstudianteMapper.class)
-            .get(DB_KEY, cp, LoaderFactory.LAZY);
+            .get(cp, LoaderFactory.LAZY);
 
-        instance = new Conexion(DB_KEY, cp, daoFactory)
+        instance = new Conexion(cp, daoFactory)
             .inicializar(config.getInput());
 
         return instance;

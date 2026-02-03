@@ -17,6 +17,8 @@ import org.slf4j.LoggerFactory;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
+import edu.acceso.sqlutils.tx.TransactionManager;
+
 /**
  * Pool de conexiones para manejar múltiples conexiones a una base de datos.
  * Utiliza {@link HikariDataSource} y un patrón Multiton para garantizar
@@ -119,7 +121,44 @@ public class ConnectionPool implements AutoCloseable {
      * @return El DataSource asociado
      */
     public DataSource getDataSource() {
+        try {
+            TransactionManager.get(key);
+            logger.warn("Hay un gestor de transacciones asociado a este ConnectionPool. A menos de que esté seguro de lo que hace, debería obtener las conexiones a través de él.");
+        } catch(IllegalStateException e) {}
+
         return ds;
+    }
+
+    /** Crea un gestor de transacciones {@link TransactionManager} asociado a este pool de conexiones */
+    public void setTransactionManager() {
+        setTransactionManager(TransactionManager.class);
+    }
+
+    /**
+     * Crea un gestor de transacciones asociado a este pool de conexiones.
+     * @param tmClass La clase derivada de {@link TransactionManager} que se va a instanciar.
+     */
+    public void setTransactionManager(Class<? extends TransactionManager> tmClass) {
+        if(!isOpen()) throw new IllegalStateException("El ConnectionPool está cerrado");
+        try {
+            TransactionManager.create(key, ds, tmClass);
+            logger.debug("Creado un gestor de transacciones {} asociado a la clave {} de este ConnectionPool", tmClass.getSimpleName(), key);
+        } catch(IllegalStateException e) {
+            logger.warn("Ya existe un gestor de transacciones asociado a la clave {}. Quizás lo creó manualmente.", key);
+        }
+    }
+
+    /**
+     * Obtiene el gestor de transacciones asociado a este pool de conexiones.
+     * @return El gestor de transacciones asociado.
+     */
+    public TransactionManager getTransactionManager() {
+        if(!isOpen()) throw new IllegalStateException("El ConnectionPool está cerrado");
+        try {
+            return TransactionManager.get(key);
+        } catch(IllegalStateException e) {
+            throw new IllegalStateException("No hay un gestor de transacciones asociado a este ConnectionPool. Debe crearlo primero con setTransactionManager().");
+        }
     }
 
     @Override
@@ -182,5 +221,13 @@ public class ConnectionPool implements AutoCloseable {
                 tableName.startsWith("pg_") ||               // PostgreSQL
                 tableName.startsWith("msrepl") ||            // MSSQL Replication
                 tableName.startsWith("sqlite_");             // SQLite
+    }
+
+    /**
+     * Obtiene la clave que identifica este pool de conexiones.
+     * @return La clave solicitada.
+     */
+    public String getKey() {
+        return key;
     }
 }

@@ -76,6 +76,7 @@ public class TransactionManager {
     protected TransactionManager(String key, DataSource ds) {
         this.key = key;
         this.ds = ds;
+        registerInstance(key);
         connectionHolder = new ThreadLocal<>();
         counter = ThreadLocal.withInitial(() -> 0);
         originalAutoCommit = new ThreadLocal<>();
@@ -87,8 +88,8 @@ public class TransactionManager {
      * @param tm El gestor de transacciones a registrar.
      * @throws IllegalStateException Si ya hay un gestor inicializado con la misma clave.
      */
-    protected static void registerInstance(String key, TransactionManager tm) {
-        if(instances.putIfAbsent(key, tm) != null) throw new IllegalStateException("La conexión '%s' ya tenía creada un gestor de transacciones".formatted(key));
+    protected void registerInstance(String key) {
+        if(instances.putIfAbsent(key, this) != null) throw new IllegalStateException("La conexión '%s' ya tenía creada un gestor de transacciones".formatted(key));
         else logger.debug("Creado gestor de transacciones para la conexión '{}'", key);
     }
 
@@ -100,9 +101,17 @@ public class TransactionManager {
      * @throws IllegalStateException Si el gestor ya ha sido inicializado.
      */
     public static TransactionManager create(String key, DataSource ds) {
-        TransactionManager tm = new TransactionManager(key, ds);
-        registerInstance(key, tm);
-        return tm;
+        return new TransactionManager(key, ds);
+    }
+
+    public static <E extends TransactionManager> E create(String key, DataSource ds, Class<E> tmClass) {
+        try {
+            var constructor = tmClass.getDeclaredConstructor(String.class, DataSource.class);
+            constructor.setAccessible(true);
+            return constructor.newInstance(key, ds);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("Error al crear instancia de '%s'".formatted(tmClass.getSimpleName()), e);
+        }
     }
 
     /**

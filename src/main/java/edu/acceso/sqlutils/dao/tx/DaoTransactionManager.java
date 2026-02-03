@@ -34,9 +34,7 @@ public class DaoTransactionManager extends TransactionManager {
      * @throws IllegalArgumentException Si ya existe una instancia con la misma clave.
      */
     public static DaoTransactionManager create(String key, DataSource ds) {
-        DaoTransactionManager tm = new DaoTransactionManager(key, ds);
-        registerInstance(key, tm);
-        return tm;
+        return new DaoTransactionManager(key, ds);
     }
 
     /**

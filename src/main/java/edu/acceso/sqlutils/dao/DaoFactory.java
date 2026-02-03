@@ -29,29 +29,26 @@ public class DaoFactory {
 
     /** Mapa que relaciona las clases de entidad con sus mappers. */
     private final Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers;
-    /** Clave que identifica la fuente de datos. */
-    private final String key;
+    /** Pool de conexiones asociado a esta fábrica de DAOs. */
+    private final ConnectionPool cp;
     /** Proveedor de DAOs (que proporciona una implementación de las operaciones CRUD y una definición de las consultas SQL) */
     private final DaoProvider daoProvider;
     /** Clase que implementa el cargador de relaciones. */
     private final Class<? extends RelationLoader<? extends Entity>> loaderClass;
 
-    /** Gestor de transacciones para DAOs */
-    private final DaoTransactionManager tm;
-
     /**
      * Constructor privado para la fábrica de DAOs.
-     * @param key Clave que identifica la fuente de datos.
+     * @param cp Pool de conexiones que utiliza la fábrica de DAOs.
      * @param daoProvider Proveedor de DAOs 
      * @param loaderClass Clase que implementa el cargador de relaciones.
      * @param mappers Mapa de mappers de entidades.
      */
-    private DaoFactory(String key, ConnectionPool cp, DaoProvider daoProvider, Class<? extends RelationLoader<? extends Entity>> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
-        this.key = key;
+    private DaoFactory(ConnectionPool cp, DaoProvider daoProvider, Class<? extends RelationLoader<? extends Entity>> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
+        this.cp = cp;
+        cp.setTransactionManager(DaoTransactionManager.class);
         this.daoProvider = daoProvider;
         this.loaderClass = loaderClass;
         this.mappers = mappers;
-        this.tm = DaoTransactionManager.create(key, cp.getDataSource());
     }
 
     /**
@@ -105,15 +102,14 @@ public class DaoFactory {
 
         /**
          * Genera una nueva instancia de {@link DaoFactory}.
-         * @param key Clave que identifica la fuente de datos.
          * @param cp Pool de conexiones.
          * @param loader Fabrica de cargadores de relaciones.
          * @return Una nueva instancia de {@link DaoFactory}.
          */
-        public DaoFactory get(String key, ConnectionPool cp, LoaderFactory loader) {
+        public DaoFactory get(ConnectionPool cp, LoaderFactory loader) {
             @SuppressWarnings("unchecked")
             var loaderClass = (Class<? extends RelationLoader<? extends Entity>> ) loader.getLoaderClass();
-            return new DaoFactory(key, cp, daoProvider, loaderClass, mappers);
+            return new DaoFactory(cp, daoProvider, loaderClass, mappers);
         }
     }
 
@@ -127,7 +123,7 @@ public class DaoFactory {
     public <T extends Entity> AbstractCrud<T> getDao(Class<T> entityClass) {
         try {
             return (AbstractCrud<T>) daoProvider.getCrudClass().getConstructor(String.class, Class.class, Map.class, Class.class, Class.class)
-                    .newInstance(key, entityClass, mappers, daoProvider.getSqlQueryClass(), loaderClass);
+                    .newInstance(cp.getKey(), entityClass, mappers, daoProvider.getSqlQueryClass(), loaderClass);
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException(String.format("Error al crear la instancia de %s", daoProvider.getCrudClass().getSimpleName()), e);
         }
@@ -138,6 +134,6 @@ public class DaoFactory {
      * @return Gestor de transacciones para DAOs.
      */
     public TransactionManager getTransactionManager() {
-        return tm;
+        return cp.getTransactionManager();
     }
 }
