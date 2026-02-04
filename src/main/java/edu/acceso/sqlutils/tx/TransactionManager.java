@@ -61,7 +61,13 @@ public class TransactionManager {
      */
     @FunctionalInterface
     public static interface TransactionableR<T> {
-        T run(Connection conn) throws DataAccessException;
+        /**
+         * Ejecuta las operaciones de la transacción.
+         * @param conn La conexión asociada a la transacción.
+         * @return El valor devuelto por las operaciones.
+         * @throws Throwable Si ocurre un error durante las operaciones.
+         */
+        T run(Connection conn) throws Throwable;
     }
 
     /**
@@ -69,7 +75,12 @@ public class TransactionManager {
      */
     @FunctionalInterface
     public static interface Transactionable {
-        void run(Connection conn) throws DataAccessException;
+        /**
+         * Ejecuta las operaciones de la transacción.
+         * @param conn La conexión asociada a la transacción.
+         * @throws Throwable Si ocurre un error durante las operaciones.
+         */
+        void run(Connection conn) throws Throwable;
     }
 
     /** Constructor protegido para implementar el patrón Multiton */

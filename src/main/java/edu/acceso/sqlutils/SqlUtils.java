@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -218,5 +219,56 @@ public class SqlUtils {
         } finally {
             conn.setAutoCommit(originalAutoCommit);
         }
+    }
+
+    /**
+     * Verifica si la base de datos ya ha sido inicializada.
+     * @return true si la base de datos tiene al menos una tabla de usuario, false en caso contrario.
+     * @throws SQLException Si ocurre un error al acceder a los metadatos de la base de datos.
+     */
+    public static boolean isDatabaseInitialized(Connection conn) throws SQLException {
+    DatabaseMetaData metaData = conn.getMetaData();
+
+        // 1. Intentamos obtener catálogo y esquema actuales
+        String catalog = conn.getCatalog();
+        String schema = null;
+        
+        try {// getSchema() no existe en versiones muy antiguas de JDBC
+            schema = conn.getSchema(); 
+        } catch (AbstractMethodError | SQLException e) {
+            // Evitamos fallos con versiones obsoletas de JDBC
+        }
+
+        try (ResultSet tables = metaData.getTables(catalog, schema, "%", new String[]{"TABLE"})) {
+            while (tables.next()) {
+                String tableName = tables.getString("TABLE_NAME");
+                logger.trace("Hallada tabla en la base de datos: {}. Comprobando si es tabla del sistema...", tableName);
+                
+                // Filtrar tablas del sistema según el SGBD
+                if (!isGenericSystemTable(tableName)) {
+                    logger.debug("{} es una tabla de usuario. Se presupone que la base de datos está completamente inicializada.", tableName);
+                    return true; // Encontramos al menos una tabla de usuario
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Verifica si el nombre de la tabla corresponde a una tabla del sistema genérica.
+     * @param tableName El nombre de la tabla.
+     * @return true si es una tabla del sistema, false en caso contrario.
+     */
+    private static boolean isGenericSystemTable(String tableName) {
+        tableName = tableName.toLowerCase();
+        
+        // Lista de tablas del sistema comunes en varios SGBD
+        return  tableName.startsWith("sys") ||               // Oracle, MSSQL, Derby, DB2, H2
+                tableName.contains("information_schema") ||  // MariaDB, MSSQL, MySQL, SQL Server, H2
+                tableName.startsWith("databasechangelog") || // Liquibase
+                tableName.startsWith("flyway_") ||           // Flyway
+                tableName.startsWith("pg_") ||               // PostgreSQL
+                tableName.startsWith("msrepl") ||            // MSSQL Replication
+                tableName.startsWith("sqlite_");             // SQLite
     }
 }

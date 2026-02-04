@@ -2,8 +2,6 @@ package edu.acceso.sqlutils.backend;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.sql.Connection;
-import java.sql.SQLException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -116,14 +114,12 @@ public class Conexion {
 
     private Conexion inicializar(ArchivoWrapper guion) throws IOException, DataAccessException {
         try(InputStream st = guion.openStream()) {
-            if(!cp.isDatabaseInitialized()) {
-                try(Connection conn = cp.getDataSource().getConnection()) {
+            cp.getTransactionManager().transaction(conn ->{
+                if(!SqlUtils.isDatabaseInitialized(conn)) {
                     SqlUtils.executeSQL(conn, st);
                     logger.info("Base de datos inicializada correctamente.");
                 }
-            }
-        } catch(SQLException e) {
-            throw new DataAccessException("Imposible conectar a la base de datos", e);
+            });
         }
 
         return this;
