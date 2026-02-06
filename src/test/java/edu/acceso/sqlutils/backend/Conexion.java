@@ -8,7 +8,6 @@ import org.slf4j.LoggerFactory;
 
 import edu.acceso.sqlutils.ArchivoWrapper;
 import edu.acceso.sqlutils.Config;
-import edu.acceso.sqlutils.ConnectionPool;
 import edu.acceso.sqlutils.SqlUtils;
 import edu.acceso.sqlutils.backend.mappers.CentroMapper;
 import edu.acceso.sqlutils.backend.mappers.EstudianteMapper;
@@ -23,7 +22,6 @@ import edu.acceso.sqlutils.dao.relations.LoaderFactory;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.modelo.Centro;
 import edu.acceso.sqlutils.modelo.Estudiante;
-import edu.acceso.sqlutils.tx.TransactionManager;
 
 
 /**
@@ -40,8 +38,6 @@ public class Conexion {
 
     /** Fábrica de DAOs para acceder a las entidades del backend */
     private final DaoFactory daoFactory;
-    /** Pool de conexiones a la base de datos */
-    private final ConnectionPool cp;
 
     /** Interfaz funcional para ejecutar transacciones con DAOs de Centro y Estudiante */
     @FunctionalInterface
@@ -61,9 +57,8 @@ public class Conexion {
      * @param ds Pool de conexiones a la base de datos.
      * @param daoFactory Fábrica de DAOs para acceder a las entidades del backend.
      */
-    private Conexion(ConnectionPool cp, DaoFactory daoFactory) {
+    private Conexion(DaoFactory daoFactory) {
         this.daoFactory = daoFactory;
-        this.cp = cp;
     }
 
     /**
@@ -75,8 +70,6 @@ public class Conexion {
         if(instance != null) throw new IllegalStateException("La conexión ya se inicializó");
 
         Config config = Config.getInstance();
-        ConnectionPool cp = ConnectionPool.create(DB_KEY, config.getDbUrl(), config.getUser(), config.getPassword());
-
         // Se configura cuáles son las sentencias SQL para las operaciones CRUD.
         SqlQueryFactory sqlQueryFactory = SqlQueryFactory.Builder.create("centros")
                 // No es necesario, porque se usa la implementación genérica,
@@ -92,12 +85,12 @@ public class Conexion {
 
         // Se defin la fábrica de objetos DAO a partir de los mappers de las entidades.
         // Para la obtención de relaciones se usa carga perezosa (Lazy Loading).
-        DaoFactory daoFactory = DaoFactory.Builder.create(daoProvider)
+        DaoFactory daoFactory = DaoFactory.Builder.create(DB_KEY, daoProvider)
             .registerMapper(CentroMapper.class)
             .registerMapper(EstudianteMapper.class)
-            .get(cp, LoaderFactory.LAZY);
+            .get(LoaderFactory.LAZY, config.getDbUrl(), config.getUser(), config.getPassword());
 
-        instance = new Conexion(cp, daoFactory)
+        instance = new Conexion(daoFactory)
             .inicializar(config.getInput());
 
         return instance;
@@ -114,7 +107,7 @@ public class Conexion {
 
     private Conexion inicializar(ArchivoWrapper guion) throws IOException, DataAccessException {
         try(InputStream st = guion.openStream()) {
-            cp.getTransactionManager().transaction(conn ->{
+            daoFactory.getTransactionManager().transaction(conn ->{
                 if(!SqlUtils.isDatabaseInitialized(conn)) {
                     SqlUtils.executeSQL(conn, st);
                     logger.info("Base de datos inicializada correctamente.");
@@ -147,7 +140,7 @@ public class Conexion {
      */
     public <T> T transactionR(TransactionInterfaceR<T> operations) throws DataAccessException {
         //return daoFactory.getTransactionManager().transaction(conn -> { return operations.run(); });
-        return TransactionManager.get(DB_KEY).transaction(conn -> { return operations.run(); });
+        return daoFactory.getTransactionManager().transaction(conn -> { return operations.run(); });
     }
 
     /**
@@ -156,6 +149,6 @@ public class Conexion {
      * @throws DataAccessException Si hay un error durante la transacción.
      */
     public void transaction(TransactionInterface operations) throws DataAccessException {
-        TransactionManager.get(DB_KEY).transaction(conn -> { operations.run(); });
+        daoFactory.getTransactionManager().transaction(conn -> { operations.run(); });
     }
 }

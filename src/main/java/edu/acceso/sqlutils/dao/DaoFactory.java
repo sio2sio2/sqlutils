@@ -2,6 +2,7 @@ package edu.acceso.sqlutils.dao;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,9 +24,14 @@ import edu.acceso.sqlutils.tx.TransactionManager;
  * proporcionar acceso a ellas a través del método {@link #getDao(Class)}.
  * 
  */
-public class DaoFactory {
+public class DaoFactory implements AutoCloseable {
     /** Logger para registrar información y errores. */
     private static final Logger logger = LoggerFactory.getLogger(DaoFactory.class);
+
+    /**
+     * Instancias de DaoFactory para implementar un patrón Multiton.
+     */
+    private static final Map<String, DaoFactory> instances = new ConcurrentHashMap<>();
 
     /** Mapa que relaciona las clases de entidad con sus mappers. */
     private final Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers;
@@ -55,10 +61,13 @@ public class DaoFactory {
      * Clase que permite construir instancias de {@link DaoFactory}.
      */
     public static class Builder {
+        /** Clave que identifica la conexión */
+        private final String key;
+
         /**
          * Mapa de mappers de entidades.
          */
-        private final Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers = new HashMap<>();
+        private final Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers = new ConcurrentHashMap<>();
         /**
          * Proveedor de DAOs.
          */
@@ -68,7 +77,8 @@ public class DaoFactory {
          * Constructor privado para la clase Builder.
          * @param daoProvider Proveedor de DAOs.
          */
-        private Builder(DaoProvider daoProvider) {
+        private Builder(String key, DaoProvider daoProvider) {
+            this.key = key;
             this.daoProvider = daoProvider;
         }
 
@@ -77,8 +87,8 @@ public class DaoFactory {
          * @param daoProvider Proveedor de DAOs.
          * @return Una nueva instancia de {@link DaoFactory.Builder}.
          */
-        public static Builder create(DaoProvider daoProvider) {
-            return new Builder(daoProvider);
+        public static Builder create(String key, DaoProvider daoProvider) {
+            return new Builder(key, daoProvider);
         }
 
         /**
@@ -102,14 +112,37 @@ public class DaoFactory {
 
         /**
          * Genera una nueva instancia de {@link DaoFactory}.
-         * @param cp Pool de conexiones.
          * @param loader Fabrica de cargadores de relaciones.
+         * @param dbUrl URL de la base de datos.
          * @return Una nueva instancia de {@link DaoFactory}.
          */
-        public DaoFactory get(ConnectionPool cp, LoaderFactory loader) {
-            @SuppressWarnings("unchecked")
-            var loaderClass = (Class<? extends RelationLoader<? extends Entity>> ) loader.getLoaderClass();
-            return new DaoFactory(cp, daoProvider, loaderClass, mappers);
+        public DaoFactory get(LoaderFactory loader, String dbUrl) {
+            return get(loader, dbUrl, null, null);
+        }
+
+        /**
+         * Genera una nueva instancia de {@link DaoFactory}.
+         * @param loader Fabrica de cargadores de relaciones.
+         * @param dbUrl URL de la base de datos.
+         * @param user Usuario de acceso de la base de datos.
+         * @param password Contraseña del usuario.
+         * @return Una nueva instancia de {@link DaoFactory}.
+         */
+        public DaoFactory get(LoaderFactory loader, String dbUrl, String user, String password) {
+
+            return instances.computeIfAbsent(key, k -> {
+                @SuppressWarnings("unchecked")
+                var loaderClass = (Class<? extends RelationLoader<? extends Entity>> ) loader.getLoaderClass();
+	    
+                ConnectionPool cp;
+                try {
+                    cp = ConnectionPool.create(key, dbUrl, user, password);
+                } catch(IllegalStateException e) {  // Creado fuera de la fábrica: lo recuperamos
+                    cp = ConnectionPool.get(key);
+                }
+
+                return new DaoFactory(cp, daoProvider, loaderClass, new HashMap<>(mappers));
+            });
         }
     }
 
@@ -135,5 +168,29 @@ public class DaoFactory {
      */
     public TransactionManager getTransactionManager() {
         return cp.getTransactionManager();
+    }
+
+    /**
+     * Obtiene la clave que identifica la base de datos
+     * @return La clave solicitada.
+     */
+    public String getKey() {
+        return cp.getKey();
+    }
+
+    /**
+     * Comprueba si el objeto está abierto
+     * @return {@link true} si está abierto.
+     */
+    public boolean isOpen() {
+        return cp.isOpen();
+    }
+
+    @Override
+    public void close() {
+        if(instances.remove(getKey(), this)) {
+            cp.close();
+            logger.debug("Borrado DaoFactory asociado a la clave {}", getKey());
+        }
     }
 }
