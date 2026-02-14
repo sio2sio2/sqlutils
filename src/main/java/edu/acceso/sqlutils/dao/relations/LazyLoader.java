@@ -23,6 +23,7 @@ public class LazyLoader<E extends Entity> extends RelationLoader<E> {
      * Constructor.
      * @param originalDao DAO a partir del cual se crea el cargador de relaciones
      * @param entityClass Clase de la entidad que carga este cargador de relaciones
+     * @throws DataAccessException Si no pueede crear el cargador de relaciones a partir del DAO proporcionado
      */
     public LazyLoader(AbstractCrud<? extends Entity> originalDao, Class<E> entityClass) throws DataAccessException {
         super(originalDao, entityClass);

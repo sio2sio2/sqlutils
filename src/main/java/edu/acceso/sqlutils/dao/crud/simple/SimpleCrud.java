@@ -10,15 +10,15 @@ import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 import edu.acceso.sqlutils.SqlUtils;
 import edu.acceso.sqlutils.crud.Entity;
+import edu.acceso.sqlutils.dao.Cache;
 import edu.acceso.sqlutils.dao.crud.AbstractCrud;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.mapper.SqlTypesTranslator;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
-import edu.acceso.sqlutils.dao.tx.Cache;
-import edu.acceso.sqlutils.dao.tx.DaoTransactionManager;
 import edu.acceso.sqlutils.errors.DataAccessException;
 
 /** 
@@ -67,7 +67,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
      * @return Entidad encontrada en la caché o {@code null} si no existe.
      */
     protected T searchInCache(Long id) {
-        Cache cache = ((DaoTransactionManager) tm).getCache();
+        Cache cache = getCache();
         if (cache == null) return null;
 
         T entity = (T) cache.get(getEntityClass(), id);
@@ -108,7 +108,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             ResultSet rs = pstmt.executeQuery();
 
             Stream<T> stream = SqlUtils.resultSetToStream(conn, pstmt, rs, fila -> mapper.resultSetToEntity(fila, this));
-            logger.info("Se ha obtenido un stream de registros de la tabla {}", mapper.getTableInfo().tableName());
+            logger.debug("Se ha obtenido un stream de registros de la tabla {}", mapper.getTableInfo().tableName());
             return stream.peek(this::putInCache);
         } catch (SQLException e) {
             logger.warn("Error al obtener el stream de registros de la tabla {}", mapper.getTableInfo().tableName(), e);
@@ -134,7 +134,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             ResultSet rs = pstmt.executeQuery();
 
             Stream<T> stream = SqlUtils.resultSetToStream(conn, pstmt, rs, fila -> mapper.resultSetToEntity(fila, this));
-            logger.info("Se ha obtenido un stream de registros de la tabla {}", mapper.getTableInfo().tableName());
+            logger.debug("Se ha obtenido un stream de registros de la tabla {}", mapper.getTableInfo().tableName());
             return stream.peek(this::putInCache);
         } catch (SQLException e) {
             logger.warn("Error al obtener los registros de la tabla {} donde {} = {}", mapper.getTableInfo().tableName(), column, value, e);
@@ -153,7 +153,11 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             pstmt.setLong(1, id);
             boolean result = pstmt.executeUpdate() > 0;
             if(result) {
-                logger.info("Registro con ID {} eliminado de la tabla {}", id, mapper.getTableInfo().tableName());
+                tm.deferLog(getClass(),
+                    Level.DEBUG,
+                    "Eliminado registro ID=%s de la tabla %s".formatted(id, mapper.getTableInfo().tableName()),
+                    "Transacción fallida impide la eliminación del registro ID=%s de la tabla %s".formatted(id, mapper.getTableInfo().tableName())
+                );
                 deleteFromCache(id);
             }
             return result;
@@ -173,7 +177,11 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         ) {
             mapper.EntityToParams(pstmt, entity);
             if(pstmt.executeUpdate()> 0) {
-                logger.info("Registro con ID {} insertado en la tabla {}", entity.getId(), mapper.getTableInfo().tableName());
+                tm.deferLog(getClass(),
+                    Level.DEBUG,
+                    "Agregado registro ID=%s en la tabla %s".formatted(entity.getId(), mapper.getTableInfo().tableName()),
+                    "Transacción fallida impide la agregación del registro ID=%s en la tabla %s".formatted(entity.getId(), mapper.getTableInfo().tableName())
+                );
                 putInCache(entity);
             }
         } catch (SQLException e) {
@@ -193,7 +201,11 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             mapper.EntityToParams(pstmt, entity);
             boolean result = pstmt.executeUpdate() > 0;
             if(result) {
-                logger.info("Registro con ID {} actualizado en la tabla {}", entity.getId(), mapper.getTableInfo().tableName());
+                tm.deferLog(getClass(),
+                    Level.DEBUG,
+                    "Actualizado registro ID=%s en la tabla %s".formatted(entity.getId(), mapper.getTableInfo().tableName()),
+                    "Transacción fallida impide la actualización del registro ID=%s en la tabla %s".formatted(entity.getId(), mapper.getTableInfo().tableName())
+                );
                 putInCache(entity);
             }
             return result;
@@ -215,7 +227,11 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             pstmt.setLong(2, oldId);
             boolean result = pstmt.executeUpdate() > 0;
             if(result) {
-                logger.info("ID del registro actualizado de {} a {} en la tabla {}", oldId, newId, mapper.getTableInfo().tableName());
+                tm.deferLog(getClass(),
+                    Level.DEBUG,
+                    "Actualizado registro con ID=%s a ID=%s en la tabla %s".formatted(oldId, newId, mapper.getTableInfo().tableName()),
+                    "Transacción fallida impide la actualización del registro con ID=%s a ID=%s en la tabla %s".formatted(oldId, newId, mapper.getTableInfo().tableName())
+                );
                 T entity = deleteFromCache(oldId);
                 if(entity != null) {
                     entity.setId(newId);

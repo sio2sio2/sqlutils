@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.Consumer;
 
 import javax.sql.DataSource;
@@ -50,10 +51,16 @@ public class TransactionManager {
     private final ThreadLocal<Integer> counter;
     /** Auto-commit original por hilo */
     private final ThreadLocal<Boolean> originalAutoCommit;
-    /** Acciones a ejecutar si se produce el commit de la transacción */
+    /** Acciones a ejecutar si se produce el commit de una transacción */
     private final ThreadLocal<Set<Consumer<TransactionManager>>> actionsOnCommit = ThreadLocal.withInitial(HashSet::new);
-    /** Acciones a ejecutar si se produce un rollback de la transacción */
+    /** Acciones a ejecutar si se produce un rollback de una transacción */
     private final ThreadLocal<Set<Consumer<TransactionManager>>> actionsOnRollback = ThreadLocal.withInitial(HashSet::new);
+    /** Acciones a ejecutar al inicio de cualquier transacción */
+    private final Set<Consumer<TransactionManager>> actionsOnAllBegin = new CopyOnWriteArraySet<>();
+    /** Acciones a ejecutar si se produce el commit de cualquier transacción */
+    private final Set<Consumer<TransactionManager>> actionsOnAllCommit = new CopyOnWriteArraySet<>();
+    /** Acciones a ejecutar si se produce un rollback de cualquier transacción */
+    private final Set<Consumer<TransactionManager>> actionsOnAllRollback = new CopyOnWriteArraySet<>();
     /** Datos que pueden almacenar las acciones registradas. La clave del mapa es el nombre del dato, **/
     private final ThreadLocal<Map<String, Object>> resources = ThreadLocal.withInitial(HashMap::new);
 
@@ -134,16 +141,6 @@ public class TransactionManager {
         return new TransactionManager(key, ds);
     }
 
-    public static <E extends TransactionManager> E create(String key, DataSource ds, Class<E> tmClass) {
-        try {
-            var constructor = tmClass.getDeclaredConstructor(String.class, DataSource.class);
-            constructor.setAccessible(true);
-            return constructor.newInstance(key, ds);
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException("Error al crear instancia de '%s'".formatted(tmClass.getSimpleName()), e);
-        }
-    }
-
     /**
      * Obtiene el gestor de transacciones asociado a una clave.
      * @param key Clave identificativa.
@@ -172,8 +169,8 @@ public class TransactionManager {
         conn.setAutoCommit(false);
         connectionHolder.set(conn);
         counter.set(counter.get() + 1);
+        actionsOnAllBegin.forEach(action -> action.accept(this));
         logger.debug("Iniciada transacción para el pool de conexiones '{}'.", key);
-        onBegin();
     }
 
     /**
@@ -246,6 +243,7 @@ public class TransactionManager {
                         conn.setAutoCommit(originalAutoCommit.get());
                         conn.close();
 
+                        actionsOnAllCommit.forEach(action -> action.accept(this));
                         actionsOnCommit.get().forEach(action -> action.accept(this));
                         logger.debug("Confirmada transacción para el pool de conexiones '{}'.", key);
                     } finally {
@@ -271,7 +269,10 @@ public class TransactionManager {
         counter.set(counterAfterRollback);
 
         try {
-            if(counterAfterRollback == 0) actionsOnRollback.get().forEach(action -> action.accept(this));
+            if(counterAfterRollback == 0) {
+                actionsOnAllRollback.forEach(action -> action.accept(this));
+                actionsOnRollback.get().forEach(action -> action.accept(this));
+            }
 
             if(conn != null && !conn.isClosed()) {
                 conn.rollback();
@@ -301,7 +302,6 @@ public class TransactionManager {
         resources.remove();
         actionsOnCommit.remove();
         actionsOnRollback.remove();
-        onClose();
     }
 
     /**
@@ -325,9 +325,6 @@ public class TransactionManager {
 
         return value;
     }
-
-    protected void onBegin() { /* Hook para acciones al iniciar la transacción */ }
-    protected void onClose() { /* Hook para acciones al cerrar la transacción */ }
 
     /**
      * Ejecuta operaciones dentro de una transacción.
@@ -366,7 +363,15 @@ public class TransactionManager {
     }
 
     /**
-     * Añade una acción que se realizará tras ejecutarse el commit.
+     * Obtiene los recursos asociados a la transacción actual. 
+     * @return Los recursos solicitados.
+     */
+    public Map<String, Object> getResources() {
+        return resources.get();
+    }
+
+    /**
+     * Añade una acción que se realizará tras ejecutarse el commit de la transacción actual.
      * @param action La acción que quiere ejecutarse.
      */
     public void addActionOnCommit(Consumer<TransactionManager> action) {
@@ -375,7 +380,7 @@ public class TransactionManager {
     }
 
     /**
-     * Añade una acción que se realizará antes de realizarse el rollback
+     * Añade una acción que se realizará antes de realizarse el rollback de la transacción actual.
      * @param action La acción que quiere ejecutarse.
      */
     public void addActionOnRollback(Consumer<TransactionManager> action) {
@@ -383,6 +388,29 @@ public class TransactionManager {
         actionsOnRollback.get().add(action);
     }
 
+    /**
+     * Añade una acción que se realizará al comenzar cualquier transacción.
+     * @param action La acción que quiere ejecutarse.
+     */
+    public void addActionOnAllBegin(Consumer<TransactionManager> action) {
+        actionsOnAllBegin.add(action);
+    }
+
+    /**
+     * Añade una acción que se realizará tras ejecutarse el commit de cualquier transacción.
+     * @param action La acción que quiere ejecutarse.
+     */
+    public void addActionOnAllCommit(Consumer<TransactionManager> action) {
+        actionsOnAllCommit.add(action);
+    }
+
+    /**
+     * Añade una acción que se realizará antes de realizarse el rollback de cualquier transacción.
+     * @param action La acción que quiere ejecutarse.
+     */
+    public void addActionOnAllRollback(Consumer<TransactionManager> action) {
+        actionsOnAllRollback.add(action);
+    }
     /**
      * Permite diferir un mensaje de log para que se registre al completarse la transacción, ya sea con éxito o con fallo.
      * @param logger El nombre del logger que se usará para registrar el mensaje.
@@ -401,11 +429,11 @@ public class TransactionManager {
             actionsOnCommit.get().add(LOG_COMMIT_ACTION);
             actionsOnRollback.get().add(LOG_ROLLBACK_ACTION);
             // Creamos la lista de mensajes diferidos.
-            resources.get().put(DEFERRED_LOG_KEYS, new ArrayList<DeferredLog>());
+            getResources().put(DEFERRED_LOG_KEYS, new ArrayList<DeferredLog>());
         }
 
         @SuppressWarnings("unchecked")
-        List<DeferredLog> deferredLogs = (List<DeferredLog>) resources.get().get(DEFERRED_LOG_KEYS);
+        List<DeferredLog> deferredLogs = (List<DeferredLog>) getResources().get(DEFERRED_LOG_KEYS);
 
         deferredLogs.add(new DeferredLog(logger, level, successMessage, failMessage));
     }
@@ -418,7 +446,7 @@ public class TransactionManager {
      * @param failMessage El mensaje a registrar si la transacción se completa con fallo.
      */
     public void deferLog(Class<?> clazz, Level level, String successMessage, String failMessage) {
-        deferLog(clazz.getSimpleName(), level, successMessage, failMessage);
+        deferLog(clazz.getName(), level, successMessage, failMessage);
     }
 
     /**
@@ -427,7 +455,7 @@ public class TransactionManager {
      */
     private static void logsOnCommit(TransactionManager tm) {
         @SuppressWarnings("unchecked")
-        List<DeferredLog> deferredLogs = (List<DeferredLog>) tm.resources.get().get(DEFERRED_LOG_KEYS);
+        List<DeferredLog> deferredLogs = (List<DeferredLog>) tm.getResources().get(DEFERRED_LOG_KEYS);
 
         // Volcamos los mensajes deferidos en el registro.
         deferredLogs.forEach(log -> {
@@ -442,7 +470,7 @@ public class TransactionManager {
      */
     private static void logsOnRollback(TransactionManager tm) {
         @SuppressWarnings("unchecked")
-        List<DeferredLog> deferredLogs = (List<DeferredLog>) tm.resources.get().get(DEFERRED_LOG_KEYS);
+        List<DeferredLog> deferredLogs = (List<DeferredLog>) tm.getResources().get(DEFERRED_LOG_KEYS);
 
         // Volcamos los mensajes deferidos en el registro.
         deferredLogs.forEach(log -> {

@@ -3,6 +3,7 @@ package edu.acceso.sqlutils.dao;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,7 +16,6 @@ import edu.acceso.sqlutils.dao.crud.simple.SimpleCrudInterface;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.relations.LoaderFactory;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
-import edu.acceso.sqlutils.dao.tx.DaoTransactionManager;
 import edu.acceso.sqlutils.tx.TransactionManager;
 
 /** 
@@ -27,6 +27,9 @@ import edu.acceso.sqlutils.tx.TransactionManager;
 public class DaoFactory implements AutoCloseable {
     /** Logger para registrar información y errores. */
     private static final Logger logger = LoggerFactory.getLogger(DaoFactory.class);
+
+    /** Clave para la caché de entidades en el gestor de transacciones */
+    public static final String CACHE_RESOURCE_KEY = new Object().toString();
 
     /**
      * Instancias de DaoFactory para implementar un patrón Multiton.
@@ -51,10 +54,26 @@ public class DaoFactory implements AutoCloseable {
      */
     private DaoFactory(ConnectionPool cp, DaoProvider daoProvider, Class<? extends RelationLoader<? extends Entity>> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
         this.cp = cp;
-        cp.setTransactionManager(DaoTransactionManager.class);
+        cp.setTransactionManager(DaoFactory::addCacheToTransactionManager);
         this.daoProvider = daoProvider;
         this.loaderClass = loaderClass;
         this.mappers = mappers;
+    }
+
+    /**
+     * Agrega una caché de entidades al gestor de transacciones
+     * @param tm El gestor de transacciones al que se le añadirá la caché.
+     */
+    private static void addCacheToTransactionManager(TransactionManager tm) {
+        tm.addActionOnAllBegin(new Consumer<TransactionManager>() {
+            @Override
+            public void accept(TransactionManager tm) {
+                tm.getResources().put(CACHE_RESOURCE_KEY, new Cache());
+                logger.trace("Creada nueva caché de entidades para la trasacción");
+            }
+        });
+
+        // No hace falta eliminar la caché, porque se borran todos los recursos al cerrar la transacción.
     }
 
     /**
@@ -84,6 +103,7 @@ public class DaoFactory implements AutoCloseable {
 
         /**
          * Crea una nueva instancia de {@link DaoFactory.Builder}.
+         * @param key Clave que identifica la conexión.
          * @param daoProvider Proveedor de DAOs.
          * @return Una nueva instancia de {@link DaoFactory.Builder}.
          */
@@ -180,7 +200,7 @@ public class DaoFactory implements AutoCloseable {
 
     /**
      * Comprueba si el objeto está abierto
-     * @return {@link true} si está abierto.
+     * @return {@code true} si está abierto.
      */
     public boolean isOpen() {
         return cp.isOpen();

@@ -13,7 +13,7 @@
             "name": "sqlutils (sqlite)",
             "request": "launch",
             "mainClass": "${config:miapp.package}.Test",
-            "args": ["-i", ":resource:/esquema.sql", "-v", "-B", "sqlite"]
+            "args": ["-i", ":resource:/esquema.sql", "-vv", "-B", "sqlite"]
         },
         {
             "type": "java",

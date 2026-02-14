@@ -2,6 +2,7 @@ package edu.acceso.sqlutils;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.Map;
 import java.util.Objects;
 
@@ -127,18 +128,20 @@ public class ConnectionPool implements AutoCloseable {
 
     /** Crea un gestor de transacciones {@link TransactionManager} asociado a este pool de conexiones */
     public void setTransactionManager() {
-        setTransactionManager(TransactionManager.class);
+        setTransactionManager(null);
     }
 
     /**
      * Crea un gestor de transacciones asociado a este pool de conexiones.
-     * @param tmClass La clase derivada de {@link TransactionManager} que se va a instanciar.
+     * @param configurer Configurador adicional para el gestor de transacciones. Si {@code null}, no se aplica ninguna.
      */
-    public void setTransactionManager(Class<? extends TransactionManager> tmClass) {
+    public void setTransactionManager(Consumer<TransactionManager> configurer) {
         if(!isOpen()) throw new IllegalStateException("El ConnectionPool está cerrado");
+
         try {
-            TransactionManager.create(key, ds, tmClass);
-            logger.debug("Creado un gestor de transacciones {} asociado a la clave {} de este ConnectionPool", tmClass.getSimpleName(), key);
+            TransactionManager tm = TransactionManager.create(key, ds);
+            if(configurer != null) configurer.accept(tm);
+            logger.debug("Creado un gestor de transacciones asociado a la clave {} de este ConnectionPool", key);
         } catch(IllegalStateException e) {
             logger.warn("Ya existe un gestor de transacciones asociado a la clave {}. Quizás lo creó manualmente.", key);
         }

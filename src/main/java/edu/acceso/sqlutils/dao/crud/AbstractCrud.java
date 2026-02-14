@@ -7,11 +7,11 @@ import org.slf4j.LoggerFactory;
 
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.crud.MinimalCrudInterface;
+import edu.acceso.sqlutils.dao.Cache;
+import edu.acceso.sqlutils.dao.DaoFactory;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.mapper.SqlTypesTranslator;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
-import edu.acceso.sqlutils.dao.tx.Cache;
-import edu.acceso.sqlutils.dao.tx.DaoTransactionManager;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.tx.TransactionManager;
 
@@ -197,7 +197,7 @@ public abstract class AbstractCrud<E extends Entity> implements MinimalCrudInter
      * @return La caché de la transacción actual.
      */
     public Cache getCache() {
-        return ((DaoTransactionManager) tm).getCache();
+        return (Cache) tm.getResources().get(DaoFactory.CACHE_RESOURCE_KEY);
     }
 
     /**

@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils.dao.tx;
+package edu.acceso.sqlutils.dao;
 
 import java.util.HashMap;
 import java.util.Map;

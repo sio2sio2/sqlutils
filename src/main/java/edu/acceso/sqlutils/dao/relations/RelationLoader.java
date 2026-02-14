@@ -35,6 +35,7 @@ public abstract class RelationLoader<E extends Entity> {
      * 
      * @param originalDao DAO a partir del cual se crea el cargador de relaciones
      * @param entityClass Clase de la entidad que carga este cargador de relaciones
+     * @throws DataAccessException Si no pueede crear el cargador de relaciones a partir del DAO proporcionado
      */
     public RelationLoader(AbstractCrud<? extends Entity> originalDao, Class<E> entityClass) throws DataAccessException {
         this.entityClass = entityClass;
@@ -48,6 +49,7 @@ public abstract class RelationLoader<E extends Entity> {
      * Construye un nuevo cargador de relaciones a partir de otro previo.
      * @param previous Cargador de relaciones previo
      * @param entityClass Clase de la entidad que carga este cargador de relaciones
+     * @throws DataAccessException Si no pueede crear el cargador de relaciones a partir del cargador previo proporcionado
      */
     public RelationLoader(RelationLoader<? extends Entity> previous, Class<E> entityClass) throws DataAccessException {
         this.entityClass = entityClass;
