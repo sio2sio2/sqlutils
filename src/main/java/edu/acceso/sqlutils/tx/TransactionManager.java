@@ -3,10 +3,14 @@ package edu.acceso.sqlutils.tx;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 import javax.sql.DataSource;
 
@@ -26,7 +30,7 @@ import edu.acceso.sqlutils.errors.DataAccessException;
  * <pre>
  *    TransactionManager tm = TransactionManager.create("gestor1", dataSource);
  * </pre>
- * <p>Una vez creada la instancia, es recomendable usar sus métodos {@link #transaction(TransactionableR)}
+ * <p>Una vez creada la instancia, deben utilizarse sus métodos {@link #transaction(TransactionableR)}
  * o {@link #transaction(Transactionable)} para ejecutar operaciones dentro de una transacción:
  * <pre>
  *    tm.transaction(conn -&gt; {
@@ -46,11 +50,20 @@ public class TransactionManager {
     private final ThreadLocal<Integer> counter;
     /** Auto-commit original por hilo */
     private final ThreadLocal<Boolean> originalAutoCommit;
-    /** Lista de mensajes de log diferidos para registrar al completarse la transacción  */
-    private final ThreadLocal<List<DeferredLog>> deferredLogs = ThreadLocal.withInitial(ArrayList::new);
+    /** Acciones a ejecutar si se produce el commit de la transacción */
+    private final ThreadLocal<Set<Consumer<TransactionManager>>> actionsOnCommit = ThreadLocal.withInitial(HashSet::new);
+    /** Acciones a ejecutar si se produce un rollback de la transacción */
+    private final ThreadLocal<Set<Consumer<TransactionManager>>> actionsOnRollback = ThreadLocal.withInitial(HashSet::new);
+    /** Datos que pueden almacenar las acciones registradas. La clave del mapa es el nombre del dato, **/
+    private final ThreadLocal<Map<String, Object>> resources = ThreadLocal.withInitial(HashMap::new);
 
     /** Instancias de gestores de transacciones accesibles por clave */
     private static final Map<String, TransactionManager> instances = new ConcurrentHashMap<>();
+
+    private static final Consumer<TransactionManager> LOG_COMMIT_ACTION = TransactionManager::logsOnCommit;
+    private static final Consumer<TransactionManager> LOG_ROLLBACK_ACTION = TransactionManager::logsOnRollback;
+    /** Clave para almacenar los logs diferidos en los recursos */
+    private static final String DEFERRED_LOG_KEYS = new Object().toString();
 
     /**
      * El DataSource asociado a cada gestor de transacciones.
@@ -147,12 +160,12 @@ public class TransactionManager {
      * transacción activa, simplemente incrementa el contador.
      * @throws SQLException Si ocurre un error al iniciar la transacción.
      */
-    public void begin() throws SQLException {
+    private void begin() throws SQLException {
        if(counter.get() > 0) {
             counter.set(counter.get() + 1);
             logger.debug("Transacción anidada para el pool de conexiones '{}'. Nivel de anidamiento: {}", key, counter.get());
             return;
-        }
+        } 
 
         Connection conn = ds.getConnection();
         originalAutoCommit.set(conn.getAutoCommit());
@@ -184,23 +197,6 @@ public class TransactionManager {
         if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para disponer de una conexión");
         logger.trace("Protegiendo la conexión asociada a la transacción '{}'. Sus statements también se protegen contra el cierre.", key);
         return ConnectionWrapper.createProxy(connectionHolder.get(), true);
-    }
-
-    /**
-     * Permite diferir un mensaje de log para que se registre al completarse la transacción, ya sea con éxito o con fallo.
-     * @param logger El nombre del logger que se usará para registrar el mensaje.
-     * @param level El nivel de log del mensaje.
-     * @param successMessage El mensaje a registrar si la transacción se completa con éxito.
-     * @param failMessage El mensaje a registrar si la transacción se completa con fallo.
-     */
-    public void deferLog(String logger, Level level, String successMessage, String failMessage) {
-        if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para diferir un mensaje de log");
-
-        Objects.requireNonNull(logger, "El logger no puede ser nulo");
-        Objects.requireNonNull(level, "El nivel de log no puede ser nulo");
-        Objects.requireNonNull(successMessage, "El mensaje de éxito no puede ser nulo");
-
-        deferredLogs.get().add(new DeferredLog(logger, level, successMessage, failMessage));
     }
 
     /**
@@ -237,7 +233,7 @@ public class TransactionManager {
      * en cuyo caso simplemente decrementa el contador.
      * @throws SQLException Si ocurre un error al confirmar la transacción.
      */
-    public void commit() throws SQLException {
+    private void commit() throws SQLException {
         switch(counter.get()) {
             case 0:
                 throw new SQLException("No hay transacción activa. Debe comenzarla con begin().");
@@ -250,11 +246,7 @@ public class TransactionManager {
                         conn.setAutoCommit(originalAutoCommit.get());
                         conn.close();
 
-                        // Volcamos los mensajes deferidos en el registro.
-                        deferredLogs.get().forEach(log -> {
-                            Logger logger = LoggerFactory.getLogger(log.logger());
-                            logger.atLevel(log.level()).log(log.successMessage());
-                        });
+                        actionsOnCommit.get().forEach(action -> action.accept(this));
                         logger.debug("Confirmada transacción para el pool de conexiones '{}'.", key);
                     } finally {
                         mrProper();
@@ -272,22 +264,14 @@ public class TransactionManager {
      * @param e La excepción que causó el deshacer la transacción.
      * @throws DataAccessException La propia excepción que se tomó como parámetro, envuelta si es preciso.
      */
-    public void rollbackandThrow(Throwable e) throws DataAccessException {
+    private void rollbackandThrow(Throwable e) throws DataAccessException {
         Connection conn = connectionHolder.get();
 
         int counterAfterRollback = counter.get() - 1;
         counter.set(counterAfterRollback);
 
         try {
-            if(counterAfterRollback == 0) {
-                // Volcamos los mensajes deferidos en el registro.
-                deferredLogs.get().forEach(log -> {
-                    if(log.failMessage() != null) {
-                        Logger logger = LoggerFactory.getLogger(log.logger());
-                        logger.atLevel(log.level()).log(log.failMessage());
-                    }
-                });
-            }
+            if(counterAfterRollback == 0) actionsOnRollback.get().forEach(action -> action.accept(this));
 
             if(conn != null && !conn.isClosed()) {
                 conn.rollback();
@@ -314,7 +298,9 @@ public class TransactionManager {
         connectionHolder.remove();
         originalAutoCommit.remove();
         counter.remove();
-        deferredLogs.remove();
+        resources.remove();
+        actionsOnCommit.remove();
+        actionsOnRollback.remove();
         onClose();
     }
 
@@ -377,5 +363,93 @@ public class TransactionManager {
      */
     public static String[] getKeys() {
         return instances.keySet().toArray(new String[0]);
+    }
+
+    /**
+     * Añade una acción que se realizará tras ejecutarse el commit.
+     * @param action La acción que quiere ejecutarse.
+     */
+    public void addActionOnCommit(Consumer<TransactionManager> action) {
+        if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para consignar acciones");
+        actionsOnCommit.get().add(action);
+    }
+
+    /**
+     * Añade una acción que se realizará antes de realizarse el rollback
+     * @param action La acción que quiere ejecutarse.
+     */
+    public void addActionOnRollback(Consumer<TransactionManager> action) {
+        if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para consignar acciones");
+        actionsOnRollback.get().add(action);
+    }
+
+    /**
+     * Permite diferir un mensaje de log para que se registre al completarse la transacción, ya sea con éxito o con fallo.
+     * @param logger El nombre del logger que se usará para registrar el mensaje.
+     * @param level El nivel de log del mensaje.
+     * @param successMessage El mensaje a registrar si la transacción se completa con éxito.
+     * @param failMessage El mensaje a registrar si la transacción se completa con fallo.
+     */
+    public void deferLog(String logger, Level level, String successMessage, String failMessage) {
+        if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para diferir un mensaje de log");
+
+        Objects.requireNonNull(logger, "El logger no puede ser nulo");
+        Objects.requireNonNull(level, "El nivel de log no puede ser nulo");
+        Objects.requireNonNull(successMessage, "El mensaje de éxito no puede ser nulo");
+
+        if(!actionsOnCommit.get().contains(LOG_COMMIT_ACTION)) {
+            actionsOnCommit.get().add(LOG_COMMIT_ACTION);
+            actionsOnRollback.get().add(LOG_ROLLBACK_ACTION);
+            // Creamos la lista de mensajes diferidos.
+            resources.get().put(DEFERRED_LOG_KEYS, new ArrayList<DeferredLog>());
+        }
+
+        @SuppressWarnings("unchecked")
+        List<DeferredLog> deferredLogs = (List<DeferredLog>) resources.get().get(DEFERRED_LOG_KEYS);
+
+        deferredLogs.add(new DeferredLog(logger, level, successMessage, failMessage));
+    }
+
+    /**
+     * Sobrecarga de {@link #deferLog(String, Level, String, String)} que permite usar la clase como logger.
+     * @param clazz La clase cuyo nombre se usará como logger.
+     * @param level El nivel de log del mensaje.
+     * @param successMessage El mensaje a registrar si la transacción se completa con éxito.
+     * @param failMessage El mensaje a registrar si la transacción se completa con fallo.
+     */
+    public void deferLog(Class<?> clazz, Level level, String successMessage, String failMessage) {
+        deferLog(clazz.getSimpleName(), level, successMessage, failMessage);
+    }
+
+    /**
+     * Registra los mensajes pendientes al producir el commit.
+     * @param tm El objeto del que se quieren registrar los mensajes.
+     */
+    private static void logsOnCommit(TransactionManager tm) {
+        @SuppressWarnings("unchecked")
+        List<DeferredLog> deferredLogs = (List<DeferredLog>) tm.resources.get().get(DEFERRED_LOG_KEYS);
+
+        // Volcamos los mensajes deferidos en el registro.
+        deferredLogs.forEach(log -> {
+            Logger logger = LoggerFactory.getLogger(log.logger());
+            logger.atLevel(log.level()).log(log.successMessage());
+        });
+    }
+
+    /**
+     * Registra los mensajes pendientes al producirse el rollback.
+     * @param tm El objeto del que se quieren registrarlos mensajes.
+     */
+    private static void logsOnRollback(TransactionManager tm) {
+        @SuppressWarnings("unchecked")
+        List<DeferredLog> deferredLogs = (List<DeferredLog>) tm.resources.get().get(DEFERRED_LOG_KEYS);
+
+        // Volcamos los mensajes deferidos en el registro.
+        deferredLogs.forEach(log -> {
+            if(log.failMessage() != null) {
+                Logger logger = LoggerFactory.getLogger(log.logger());
+                logger.atLevel(log.level()).log(log.failMessage());
+            }
+        });
     }
 }
