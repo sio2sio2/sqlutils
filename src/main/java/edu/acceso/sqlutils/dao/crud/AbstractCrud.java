@@ -4,15 +4,18 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 import edu.acceso.sqlutils.crud.Entity;
 import edu.acceso.sqlutils.crud.MinimalCrudInterface;
-import edu.acceso.sqlutils.dao.Cache;
-import edu.acceso.sqlutils.dao.DaoFactory;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.mapper.SqlTypesTranslator;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
+import edu.acceso.sqlutils.dao.tx.Cache;
+import edu.acceso.sqlutils.dao.tx.CacheManager;
 import edu.acceso.sqlutils.errors.DataAccessException;
+import edu.acceso.sqlutils.tx.LoggingManager;
+import edu.acceso.sqlutils.tx.TransactionContext;
 import edu.acceso.sqlutils.tx.TransactionManager;
 
 /** 
@@ -49,7 +52,7 @@ public abstract class AbstractCrud<E extends Entity> implements MinimalCrudInter
      * Constructor que recibe una clave y una clase que implementa {@link MinimalSqlQuery}.
      * @param key Clave que identifica la fuente de datos.
      * @param entityClass La clase de la entidad que maneja este CRUD.
-     * @param mappers El EntityMapper que mapea entidades a registros de la base de
+     * @param mappers El EntityMapper que mapea entidades a registros de la base de datos.
      * @param sqlQueryClass La clase que implementa las consultas SQL.
      * @param loaderClass La clase que implementa el cargador de relaciones.
      */
@@ -197,7 +200,31 @@ public abstract class AbstractCrud<E extends Entity> implements MinimalCrudInter
      * @return La caché de la transacción actual.
      */
     public Cache getCache() {
-        return (Cache) tm.getResources().get(DaoFactory.CACHE_RESOURCE_KEY);
+        return (Cache) tm.getContext().getResource(CacheManager.KEY);
+    }
+
+    /**
+     * Permite pasar mensajes de registros que se difieren hasta que se conozca el resultado de la transacción (commit o rollback).
+     * @param name El nombre del logger que se utilizará para registrar el mensaje.
+     * @param level El nivel de log (INFO, ERROR, etc.) para el mensaje.
+     * @param successMessage El mensaje que se registrará si la transacción se confirma (commit).
+     * @param failMessage El mensaje que se registrará si la transacción se revierte (rollback).
+     */
+    protected void sendLogMessage(String name, Level level, String successMessage, String failMessage) {
+        TransactionContext context = tm.getContext();
+        LoggingManager loggerManager = TransactionManager.get(tm.getKey()).getContext().getEventListener(LoggingManager.KEY, LoggingManager.class);
+        loggerManager.add(context, name, level, successMessage, failMessage);
+    }
+
+    /**
+     * Permite pasar mensajes de registros que se difieren hasta que se conozca el resultado de la transacción (commit o rollback).
+     * @param clazz La clase que es responsable de generar el mensaje.
+     * @param level El nivel de log (INFO, ERROR, etc.) para el mensaje.
+     * @param successMessage El mensaje que se registrará si la transacción se confirma (commit).
+     * @param failMessage El mensaje que se registrará si la transacción se revierte (rollback).
+     */
+    protected void sendLogMessage(Class<?> clazz, Level level, String successMessage, String failMessage) {
+        sendLogMessage(clazz.getName(), level, successMessage, failMessage);
     }
 
     /**

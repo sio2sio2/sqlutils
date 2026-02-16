@@ -2,6 +2,7 @@ package edu.acceso.sqlutils.backend;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.sql.Connection;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,7 +84,7 @@ public class Conexion {
         // Se define cuáles son las operaciones CRUD que implementarán los DAO.
         DaoProvider daoProvider = new DaoProvider(SimpleListCrud.class, sqlQueryClass);
 
-        // Se defin la fábrica de objetos DAO a partir de los mappers de las entidades.
+        // Se define la fábrica de objetos DAO a partir de los mappers de las entidades.
         // Para la obtención de relaciones se usa carga perezosa (Lazy Loading).
         DaoFactory daoFactory = DaoFactory.Builder.create(DB_KEY, daoProvider)
             .registerMapper(CentroMapper.class)
@@ -107,7 +108,8 @@ public class Conexion {
 
     private Conexion inicializar(ArchivoWrapper guion) throws IOException, DataAccessException {
         try(InputStream st = guion.openStream()) {
-            daoFactory.getTransactionManager().transaction(conn ->{
+            daoFactory.getTransactionManager().transaction(ctxt ->{
+                Connection conn = ctxt.connection();
                 if(!SqlUtils.isDatabaseInitialized(conn)) {
                     SqlUtils.executeSQL(conn, st);
                     logger.info("Base de datos inicializada correctamente.");

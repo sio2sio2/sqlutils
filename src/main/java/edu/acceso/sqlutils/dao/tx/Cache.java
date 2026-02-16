@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils.dao;
+package edu.acceso.sqlutils.dao.tx;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -12,7 +12,7 @@ import edu.acceso.sqlutils.dao.relations.RelationEntity;
 /**
  * Caché de entidades cargadas durante una transacción DAO.
  * Permite reutilizar instancias ya cargadas para optimizar el acceso a datos relacionados.
- * TODO:: ¿Y si la entidad enlaza (Fk) con otra u otras entidades? ¿No habría que guardarlas también?
+ * Implementa EventListener para gestionar su ciclo de vida junto con la transacción.
  */
 public class Cache {
     private static final Logger logger = LoggerFactory.getLogger(Cache.class);
@@ -109,5 +109,5 @@ public class Cache {
     public <E extends Entity> E delete(E entity) {
         if(entity == null) return null;
         return delete(entity.getClass(), entity.getId());
-    }   
+    }
 }

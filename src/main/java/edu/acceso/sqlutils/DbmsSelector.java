@@ -19,12 +19,12 @@ public enum DbmsSelector {
     H2("jdbc:h2:tcp://[<host>[:<port>]]/<base>", "org.h2.Driver");
 
     private final String url;
-    private final String driverClass;
+    private final String driver;
     private Boolean supported;
 
-    DbmsSelector(String url, String driverClass) {
+    DbmsSelector(String url, String driver) {
         this.url = url;
-        this.driverClass = driverClass;
+        this.driver = driver;
     }
 
     /**
@@ -83,12 +83,20 @@ public enum DbmsSelector {
     public boolean isSupported() {
         if(supported == null) {
             try {
-                Class.forName(driverClass);
+                Class.forName(driver);
                 supported = true;
             } catch (ClassNotFoundException e) {
                 supported = false;
             }
         }
         return supported;
+    }
+
+    /**
+     * Devuelve el driver JDBC asociado al SGBD.
+     * @return El driver JDBC solicitado.
+     */
+    public String getDriver() {
+        return driver;
     }
 }

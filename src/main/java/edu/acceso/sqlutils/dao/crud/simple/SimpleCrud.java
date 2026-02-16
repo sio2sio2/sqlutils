@@ -14,11 +14,11 @@ import org.slf4j.event.Level;
 
 import edu.acceso.sqlutils.SqlUtils;
 import edu.acceso.sqlutils.crud.Entity;
-import edu.acceso.sqlutils.dao.Cache;
 import edu.acceso.sqlutils.dao.crud.AbstractCrud;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.mapper.SqlTypesTranslator;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
+import edu.acceso.sqlutils.dao.tx.Cache;
 import edu.acceso.sqlutils.errors.DataAccessException;
 
 /** 
@@ -153,7 +153,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             pstmt.setLong(1, id);
             boolean result = pstmt.executeUpdate() > 0;
             if(result) {
-                tm.deferLog(getClass(),
+                sendLogMessage(getClass(),
                     Level.DEBUG,
                     "Eliminado registro ID=%s de la tabla %s".formatted(id, mapper.getTableInfo().tableName()),
                     "Transacción fallida impide la eliminación del registro ID=%s de la tabla %s".formatted(id, mapper.getTableInfo().tableName())
@@ -177,7 +177,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         ) {
             mapper.EntityToParams(pstmt, entity);
             if(pstmt.executeUpdate()> 0) {
-                tm.deferLog(getClass(),
+                sendLogMessage(getClass(),
                     Level.DEBUG,
                     "Agregado registro ID=%s en la tabla %s".formatted(entity.getId(), mapper.getTableInfo().tableName()),
                     "Transacción fallida impide la agregación del registro ID=%s en la tabla %s".formatted(entity.getId(), mapper.getTableInfo().tableName())
@@ -201,7 +201,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             mapper.EntityToParams(pstmt, entity);
             boolean result = pstmt.executeUpdate() > 0;
             if(result) {
-                tm.deferLog(getClass(),
+                sendLogMessage(getClass(),
                     Level.DEBUG,
                     "Actualizado registro ID=%s en la tabla %s".formatted(entity.getId(), mapper.getTableInfo().tableName()),
                     "Transacción fallida impide la actualización del registro ID=%s en la tabla %s".formatted(entity.getId(), mapper.getTableInfo().tableName())
@@ -227,7 +227,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
             pstmt.setLong(2, oldId);
             boolean result = pstmt.executeUpdate() > 0;
             if(result) {
-                tm.deferLog(getClass(),
+                sendLogMessage(getClass(),
                     Level.DEBUG,
                     "Actualizado registro con ID=%s a ID=%s en la tabla %s".formatted(oldId, newId, mapper.getTableInfo().tableName()),
                     "Transacción fallida impide la actualización del registro con ID=%s a ID=%s en la tabla %s".formatted(oldId, newId, mapper.getTableInfo().tableName())

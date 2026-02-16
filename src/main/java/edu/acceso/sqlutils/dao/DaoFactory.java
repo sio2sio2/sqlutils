@@ -3,7 +3,6 @@ package edu.acceso.sqlutils.dao;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +15,8 @@ import edu.acceso.sqlutils.dao.crud.simple.SimpleCrudInterface;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.relations.LoaderFactory;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
+import edu.acceso.sqlutils.dao.tx.CacheManager;
+import edu.acceso.sqlutils.tx.LoggingManager;
 import edu.acceso.sqlutils.tx.TransactionManager;
 
 /** 
@@ -45,6 +46,12 @@ public class DaoFactory implements AutoCloseable {
     /** Clase que implementa el cargador de relaciones. */
     private final Class<? extends RelationLoader<? extends Entity>> loaderClass;
 
+    /** Listener para posponer el registro de mensajes hasta que culmine la transacción */
+    private final LoggingManager logManager = new LoggingManager();
+
+    /** Listener para implementar una caché de entidades */
+    private final CacheManager cacheManager = new CacheManager();
+
     /**
      * Constructor privado para la fábrica de DAOs.
      * @param cp Pool de conexiones que utiliza la fábrica de DAOs.
@@ -54,26 +61,14 @@ public class DaoFactory implements AutoCloseable {
      */
     private DaoFactory(ConnectionPool cp, DaoProvider daoProvider, Class<? extends RelationLoader<? extends Entity>> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
         this.cp = cp;
-        cp.setTransactionManager(DaoFactory::addCacheToTransactionManager);
+        /** Gestor de transacciones con soporte para logging y cacheo */
+        cp.initTransactionManager(Map.of(
+            LoggingManager.KEY, logManager,
+            CacheManager.KEY, cacheManager)
+        );
         this.daoProvider = daoProvider;
         this.loaderClass = loaderClass;
         this.mappers = mappers;
-    }
-
-    /**
-     * Agrega una caché de entidades al gestor de transacciones
-     * @param tm El gestor de transacciones al que se le añadirá la caché.
-     */
-    private static void addCacheToTransactionManager(TransactionManager tm) {
-        tm.addActionOnAllBegin(new Consumer<TransactionManager>() {
-            @Override
-            public void accept(TransactionManager tm) {
-                tm.getResources().put(CACHE_RESOURCE_KEY, new Cache());
-                logger.trace("Creada nueva caché de entidades para la trasacción");
-            }
-        });
-
-        // No hace falta eliminar la caché, porque se borran todos los recursos al cerrar la transacción.
     }
 
     /**

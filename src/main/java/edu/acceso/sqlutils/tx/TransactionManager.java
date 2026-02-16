@@ -2,24 +2,17 @@ package edu.acceso.sqlutils.tx;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.function.Consumer;
 
 import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.event.Level;
 
-import edu.acceso.sqlutils.ConnectionWrapper;
 import edu.acceso.sqlutils.errors.DataAccessException;
 
 /**
@@ -45,32 +38,19 @@ import edu.acceso.sqlutils.errors.DataAccessException;
 public class TransactionManager {
     private static final Logger logger = LoggerFactory.getLogger(TransactionManager.class);
 
-    /** Conexión por hilo para manejar transacciones anidadas */
-    private final ThreadLocal<Connection> connectionHolder;
-    /** Contador de niveles de transacción por hilo */
-    private final ThreadLocal<Integer> counter;
-    /** Auto-commit original por hilo */
-    private final ThreadLocal<Boolean> originalAutoCommit;
-    /** Acciones a ejecutar si se produce el commit de una transacción */
-    private final ThreadLocal<Set<Consumer<TransactionManager>>> actionsOnCommit = ThreadLocal.withInitial(HashSet::new);
-    /** Acciones a ejecutar si se produce un rollback de una transacción */
-    private final ThreadLocal<Set<Consumer<TransactionManager>>> actionsOnRollback = ThreadLocal.withInitial(HashSet::new);
-    /** Acciones a ejecutar al inicio de cualquier transacción */
-    private final Set<Consumer<TransactionManager>> actionsOnAllBegin = new CopyOnWriteArraySet<>();
-    /** Acciones a ejecutar si se produce el commit de cualquier transacción */
-    private final Set<Consumer<TransactionManager>> actionsOnAllCommit = new CopyOnWriteArraySet<>();
-    /** Acciones a ejecutar si se produce un rollback de cualquier transacción */
-    private final Set<Consumer<TransactionManager>> actionsOnAllRollback = new CopyOnWriteArraySet<>();
-    /** Datos que pueden almacenar las acciones registradas. La clave del mapa es el nombre del dato, **/
-    private final ThreadLocal<Map<String, Object>> resources = ThreadLocal.withInitial(HashMap::new);
-
     /** Instancias de gestores de transacciones accesibles por clave */
     private static final Map<String, TransactionManager> instances = new ConcurrentHashMap<>();
 
-    private static final Consumer<TransactionManager> LOG_COMMIT_ACTION = TransactionManager::logsOnCommit;
-    private static final Consumer<TransactionManager> LOG_ROLLBACK_ACTION = TransactionManager::logsOnRollback;
-    /** Clave para almacenar los logs diferidos en los recursos */
-    private static final String DEFERRED_LOG_KEYS = new Object().toString();
+    /** Conexión por hilo para manejar transacciones anidadas */
+    private final ThreadLocal<Transaction> contextHolder;
+
+    /** Lista de listeners de eventos para todas las transacciones */
+    private final Set<EventListener> listeners = new CopyOnWriteArraySet<>();
+    /** Mapa para almacenar claves asociadas a los listeners persistentes y así poderlos recuperar luego */
+    private final Map<String, EventListener> listenerKeys = new ConcurrentHashMap<>();
+
+    /** Mapa para almacenar claves asociadas a los listeners efímeros */
+    private final ThreadLocal<Map<String, EventListener>> ephemeralListeners = ThreadLocal.withInitial(LinkedHashMap::new);
 
     /**
      * El DataSource asociado a cada gestor de transacciones.
@@ -89,11 +69,11 @@ public class TransactionManager {
     public static interface TransactionableR<T> {
         /**
          * Ejecuta las operaciones de la transacción.
-         * @param conn La conexión asociada a la transacción.
+         * @param ctxt El contexto de la transacción.
          * @return El valor devuelto por las operaciones.
          * @throws Throwable Si ocurre un error durante las operaciones.
          */
-        T run(Connection conn) throws Throwable;
+        T run(TransactionContext ctxt) throws Throwable;
     }
 
     /**
@@ -103,31 +83,21 @@ public class TransactionManager {
     public static interface Transactionable {
         /**
          * Ejecuta las operaciones de la transacción.
-         * @param conn La conexión asociada a la transacción.
+         * @param ctxt El contexto de la transacción.
          * @throws Throwable Si ocurre un error durante las operaciones.
          */
-        void run(Connection conn) throws Throwable;
+        void run(TransactionContext ctxt) throws Throwable;
     }
 
     /** Constructor protegido para implementar el patrón Multiton */
     protected TransactionManager(String key, DataSource ds) {
         this.key = key;
         this.ds = ds;
-        registerInstance(key);
-        connectionHolder = new ThreadLocal<>();
-        counter = ThreadLocal.withInitial(() -> 0);
-        originalAutoCommit = new ThreadLocal<>();
-    }
 
-    /**
-     * Registra una nueva instancia de TransactionManager.
-     * @param key La clave identificativa del gestor.
-     * @param tm El gestor de transacciones a registrar.
-     * @throws IllegalStateException Si ya hay un gestor inicializado con la misma clave.
-     */
-    protected void registerInstance(String key) {
         if(instances.putIfAbsent(key, this) != null) throw new IllegalStateException("La conexión '%s' ya tenía creada un gestor de transacciones".formatted(key));
         else logger.debug("Creado gestor de transacciones para la conexión '{}'", key);
+
+        this.contextHolder = new ThreadLocal<>();
     }
 
     /**
@@ -153,155 +123,21 @@ public class TransactionManager {
     }
 
     /**
-     * Inicia una transacción creando una conexión para ello. Si ya hay una
-     * transacción activa, simplemente incrementa el contador.
-     * @throws SQLException Si ocurre un error al iniciar la transacción.
-     */
-    private void begin() throws SQLException {
-       if(counter.get() > 0) {
-            counter.set(counter.get() + 1);
-            logger.debug("Transacción anidada para el pool de conexiones '{}'. Nivel de anidamiento: {}", key, counter.get());
-            return;
-        } 
-
-        Connection conn = ds.getConnection();
-        originalAutoCommit.set(conn.getAutoCommit());
-        conn.setAutoCommit(false);
-        connectionHolder.set(conn);
-        counter.set(counter.get() + 1);
-        actionsOnAllBegin.forEach(action -> action.accept(this));
-        logger.debug("Iniciada transacción para el pool de conexiones '{}'.", key);
-    }
-
-    /**
-     * Obtiene la conexión asociada a la transacción actual para resultados
-     * que no son flujos (listas, etc.). Se caracteriza porque las sentencias
-     * creadas a partir de esta conexión se pueden cerar manualmente antes del cierre
-     * de la conexión.
-     * @return La conexión asociada a la transacción actual.
-     */
-    public Connection getConnectionForList() {
-        if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para disponer de una conexión");
-        logger.trace("Protegiendo la conexión asociada a la transacción '{}'. Sus statements no se protegen contra el cierre.", key);
-        return ConnectionWrapper.createProxy(connectionHolder.get(), false);
-    }
-
-    /**
      * Obtiene la conexión asociada a la transacción actual.
      * @return La conexión asociada a la transacción actual.
      */
     public Connection getConnection() {
-        if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para disponer de una conexión");
-        logger.trace("Protegiendo la conexión asociada a la transacción '{}'. Sus statements también se protegen contra el cierre.", key);
-        return ConnectionWrapper.createProxy(connectionHolder.get(), true);
+        return contextHolder.get().getContext().connection();
     }
 
     /**
-     * Permite diferir un mensaje de log para que se registre al completarse la transacción con éxito. No se registra
-     * ningún mensaje si la transacción se completa con fallo.
-     * @param logger El nombre del logger que se usará para registrar el mensaje.
-     * @param level El nivel de log del mensaje.
-     * @param message El mensaje a registrar si la transacción se completa con éxito.
+     * Obtiene el contexto de la transacción actual.
+     * @return El contexto solicitado.
+     * @throws IllegalStateException Si no hay una transacción activa en el hilo actual.
      */
-    public void deferLog(String logger, Level level, String message) {
-        deferLog(logger, level, message, null);
-    }
-
-    /**
-     * Obtiene la conexión asociada a la transacción del gestor identificado por la clave.
-     * @param key Clave identificativa del gestor.
-     * @return La conexión asociada a la transacción referida por la clave.
-     */
-    public static Connection getConnection(String key) {
-        return get(key).getConnection();
-    }
-
-    /**
-     * Obtiene la conexión para listas asociada a la transacción del gestor identificado por la clave.
-     * @param key Clave identificativa del gestor.
-     * @return La conexión para listas asociada a la transacción referida por la clave.
-     */
-    public static Connection getConnectionForList(String key) {
-        return get(key).getConnectionForList();
-    }
-
-    /**
-     * Confirma la transacción actual, a menos que la transacción esté anidada,
-     * en cuyo caso simplemente decrementa el contador.
-     * @throws SQLException Si ocurre un error al confirmar la transacción.
-     */
-    private void commit() throws SQLException {
-        switch(counter.get()) {
-            case 0:
-                throw new SQLException("No hay transacción activa. Debe comenzarla con begin().");
-            case 1:
-                Connection conn = connectionHolder.get();
-
-                if (conn != null) {
-                    try {
-                        conn.commit();
-                        conn.setAutoCommit(originalAutoCommit.get());
-                        conn.close();
-
-                        actionsOnAllCommit.forEach(action -> action.accept(this));
-                        actionsOnCommit.get().forEach(action -> action.accept(this));
-                        logger.debug("Confirmada transacción para el pool de conexiones '{}'.", key);
-                    } finally {
-                        mrProper();
-                    }
-                }
-                break;
-            default:
-                counter.set(counter.get() - 1);
-                logger.trace("La transacción '{}' está anidada. La confirmación sólo regresa al nivel {}", key, counter.get());
-        }
-    }
-
-    /**
-     * Deshace la transacción actual y lanza una excepción adecuada.
-     * @param e La excepción que causó el deshacer la transacción.
-     * @throws DataAccessException La propia excepción que se tomó como parámetro, envuelta si es preciso.
-     */
-    private void rollbackandThrow(Throwable e) throws DataAccessException {
-        Connection conn = connectionHolder.get();
-
-        int counterAfterRollback = counter.get() - 1;
-        counter.set(counterAfterRollback);
-
-        try {
-            if(counterAfterRollback == 0) {
-                actionsOnAllRollback.forEach(action -> action.accept(this));
-                actionsOnRollback.get().forEach(action -> action.accept(this));
-            }
-
-            if(conn != null && !conn.isClosed()) {
-                conn.rollback();
-                conn.setAutoCommit(originalAutoCommit.get());
-                conn.close();
-            }
-        } catch (SQLException ex) {
-            logger.error("Error al deshacer la transacción", ex);
-            if(e != null) e.addSuppressed(ex);
-        } finally {
-            // Ya no quedan más niveles por cerrar.
-            if(counterAfterRollback == 0) mrProper();
-        }
-        if(e instanceof RuntimeException re) throw re;
-        if(e instanceof DataAccessException re) throw re;
-        if(e instanceof Error re) throw re;
-        else throw new DataAccessException("Error en la transacción", e);
-    }
-
-    /**
-     * Limpia los recursos asociados a la transacción actual.
-     */
-    private void mrProper() {
-        connectionHolder.remove();
-        originalAutoCommit.remove();
-        counter.remove();
-        resources.remove();
-        actionsOnCommit.remove();
-        actionsOnRollback.remove();
+    public TransactionContext getContext() {
+        if(!isActive()) throw new IllegalStateException("No hay ninguna transacción activa en el hilo '%s'".formatted(Thread.currentThread().getName()));
+        return contextHolder.get().getContext();
     }
 
     /**
@@ -314,13 +150,40 @@ public class TransactionManager {
     public <T> T transaction(TransactionableR<T> operations) throws DataAccessException {
         T value = null;
 
+        Transaction context = contextHolder.get();
+        boolean isNewTransaction = !isActive();
+
+        if(isNewTransaction) {
+            try {
+                Map<String, EventListener> txListeners = new LinkedHashMap<>();
+                for(EventListener listener: listeners) {
+                    String key = listenerKeys.entrySet().stream()
+                        .filter(e -> e.getValue() == listener)
+                        .map(Map.Entry::getKey)
+                        .findFirst().orElseThrow(() -> new IllegalStateException("Problema de concurrencia: El listener '%s' no tiene clave asociada".formatted(listener)));
+
+                    txListeners.put(key, listener);
+                }
+                
+                txListeners.putAll(ephemeralListeners.get());    
+                ephemeralListeners.get().clear();
+
+                context = new Transaction(getKey(), ds.getConnection(), txListeners);
+                contextHolder.set(context);
+            } catch (SQLException e) {
+                throw new DataAccessException("Error al obtener la conexión del DataSource", e);
+            }
+        }
+
         try {
-            begin();
-            value = operations.run(this.getConnection());
-            commit();
+            context.begin();
+            value = operations.run(this.getContext());
+            context.commit();
         } catch (Throwable e) {
-            rollbackandThrow(e);
-            logger.debug("Deshecha transacción para el pool de conexiones '{}'.", key);
+            context.rollback(e);
+        }
+        finally {
+            if(isNewTransaction) contextHolder.remove();
         }
 
         return value;
@@ -343,7 +206,7 @@ public class TransactionManager {
      * @return {@code true}, si la transacción está abierta.
      */
     public boolean isActive() {
-        return counter.get() > 0;
+        return contextHolder.get() != null;
     }
 
     /**
@@ -363,121 +226,56 @@ public class TransactionManager {
     }
 
     /**
-     * Obtiene los recursos asociados a la transacción actual. 
-     * @return Los recursos solicitados.
+     * Añade un listener persistente para su ejecución en todas las transacciones del gestor.
+     * @param key La clave identificativa del listener.
+     * @param listener El listener que se desea añadir.
+     * @throws IllegalStateException Si ya existe un listener registrado con la clave dada.
      */
-    public Map<String, Object> getResources() {
-        return resources.get();
+    public void addListener(String key, EventListener listener) {
+        if(listenerKeys.putIfAbsent(key, listener) != null) throw new IllegalStateException("Ya hay un listener registrado con la clave '%s'".formatted(key));
+        listeners.add(listener);
     }
 
     /**
-     * Añade una acción que se realizará tras ejecutarse el commit de la transacción actual.
-     * @param action La acción que quiere ejecutarse.
+     * Elimina un listener persistente registrado con la clave dada.
+     * @param key La clave identificativa del listener a eliminar.
      */
-    public void addActionOnCommit(Consumer<TransactionManager> action) {
-        if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para consignar acciones");
-        actionsOnCommit.get().add(action);
+    public void removeListener(String key) {
+        EventListener listener = listenerKeys.remove(key);
+        if(listener != null) listeners.remove(listener);
     }
 
     /**
-     * Añade una acción que se realizará antes de realizarse el rollback de la transacción actual.
-     * @param action La acción que quiere ejecutarse.
+     * Obtiene un listener persistente registrado con la clave dada.
+     * @param key La clave que identifica al listener deseado.
+     * @return El listener registrado con la clave dada, o {@code null} si no existe.
      */
-    public void addActionOnRollback(Consumer<TransactionManager> action) {
-        if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para consignar acciones");
-        actionsOnRollback.get().add(action);
+    public EventListener getListener(String key) {
+        return listenerKeys.get(key);
     }
 
     /**
-     * Añade una acción que se realizará al comenzar cualquier transacción.
-     * @param action La acción que quiere ejecutarse.
+     * Obtiene un listener persistente registrado con la clave dada y lo castea al tipo especificado.
+     * @param <T> Tipo del listener esperado.
+     * @param key La clave que identifica al listener deseado.
+     * @param type La clase del tipo del listener esperado.
+     * @return El listener registrado con la clave dada, o {@code null} si no existe.
+     * @throws IllegalStateException Si el listener registrado con la clave dada no es del tipo especificado.
      */
-    public void addActionOnAllBegin(Consumer<TransactionManager> action) {
-        actionsOnAllBegin.add(action);
+    public <T extends EventListener> T getListener(String key, Class<T> type) {
+        EventListener listener = getListener(key);
+        if(listener == null) return null;
+        if(!type.isInstance(listener)) throw new IllegalStateException("El listener registrado con la clave '%s' no es del tipo '%s'".formatted(key, type.getName()));
+        return type.cast(listener);
     }
 
     /**
-     * Añade una acción que se realizará tras ejecutarse el commit de cualquier transacción.
-     * @param action La acción que quiere ejecutarse.
+     * Añade un listener efímero para su ejecución sólo en la próxima transacción del hilo.
+     * @param key La clave identificativa del listener.
+     * @param listener El listener que se desea añadir.
      */
-    public void addActionOnAllCommit(Consumer<TransactionManager> action) {
-        actionsOnAllCommit.add(action);
-    }
-
-    /**
-     * Añade una acción que se realizará antes de realizarse el rollback de cualquier transacción.
-     * @param action La acción que quiere ejecutarse.
-     */
-    public void addActionOnAllRollback(Consumer<TransactionManager> action) {
-        actionsOnAllRollback.add(action);
-    }
-    /**
-     * Permite diferir un mensaje de log para que se registre al completarse la transacción, ya sea con éxito o con fallo.
-     * @param logger El nombre del logger que se usará para registrar el mensaje.
-     * @param level El nivel de log del mensaje.
-     * @param successMessage El mensaje a registrar si la transacción se completa con éxito.
-     * @param failMessage El mensaje a registrar si la transacción se completa con fallo.
-     */
-    public void deferLog(String logger, Level level, String successMessage, String failMessage) {
-        if(!isActive()) throw new IllegalStateException("Debe abrir una transacción para diferir un mensaje de log");
-
-        Objects.requireNonNull(logger, "El logger no puede ser nulo");
-        Objects.requireNonNull(level, "El nivel de log no puede ser nulo");
-        Objects.requireNonNull(successMessage, "El mensaje de éxito no puede ser nulo");
-
-        if(!actionsOnCommit.get().contains(LOG_COMMIT_ACTION)) {
-            actionsOnCommit.get().add(LOG_COMMIT_ACTION);
-            actionsOnRollback.get().add(LOG_ROLLBACK_ACTION);
-            // Creamos la lista de mensajes diferidos.
-            getResources().put(DEFERRED_LOG_KEYS, new ArrayList<DeferredLog>());
-        }
-
-        @SuppressWarnings("unchecked")
-        List<DeferredLog> deferredLogs = (List<DeferredLog>) getResources().get(DEFERRED_LOG_KEYS);
-
-        deferredLogs.add(new DeferredLog(logger, level, successMessage, failMessage));
-    }
-
-    /**
-     * Sobrecarga de {@link #deferLog(String, Level, String, String)} que permite usar la clase como logger.
-     * @param clazz La clase cuyo nombre se usará como logger.
-     * @param level El nivel de log del mensaje.
-     * @param successMessage El mensaje a registrar si la transacción se completa con éxito.
-     * @param failMessage El mensaje a registrar si la transacción se completa con fallo.
-     */
-    public void deferLog(Class<?> clazz, Level level, String successMessage, String failMessage) {
-        deferLog(clazz.getName(), level, successMessage, failMessage);
-    }
-
-    /**
-     * Registra los mensajes pendientes al producir el commit.
-     * @param tm El objeto del que se quieren registrar los mensajes.
-     */
-    private static void logsOnCommit(TransactionManager tm) {
-        @SuppressWarnings("unchecked")
-        List<DeferredLog> deferredLogs = (List<DeferredLog>) tm.getResources().get(DEFERRED_LOG_KEYS);
-
-        // Volcamos los mensajes deferidos en el registro.
-        deferredLogs.forEach(log -> {
-            Logger logger = LoggerFactory.getLogger(log.logger());
-            logger.atLevel(log.level()).log(log.successMessage());
-        });
-    }
-
-    /**
-     * Registra los mensajes pendientes al producirse el rollback.
-     * @param tm El objeto del que se quieren registrarlos mensajes.
-     */
-    private static void logsOnRollback(TransactionManager tm) {
-        @SuppressWarnings("unchecked")
-        List<DeferredLog> deferredLogs = (List<DeferredLog>) tm.getResources().get(DEFERRED_LOG_KEYS);
-
-        // Volcamos los mensajes deferidos en el registro.
-        deferredLogs.forEach(log -> {
-            if(log.failMessage() != null) {
-                Logger logger = LoggerFactory.getLogger(log.logger());
-                logger.atLevel(log.level()).log(log.failMessage());
-            }
-        });
+    public void addEphemeralListener(String key, EventListener listener) {
+        if(ephemeralListeners.get().containsKey(key)) throw new IllegalStateException("Ya hay un listener efímero registrado con la clave '%s'".formatted(key));
+        ephemeralListeners.get().put(key, listener);
     }
 }

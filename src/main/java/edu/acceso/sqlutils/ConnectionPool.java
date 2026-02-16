@@ -2,7 +2,6 @@ package edu.acceso.sqlutils;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 import java.util.Map;
 import java.util.Objects;
 
@@ -14,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
+import edu.acceso.sqlutils.tx.EventListener;
 import edu.acceso.sqlutils.tx.TransactionManager;
 
 /**
@@ -126,25 +126,29 @@ public class ConnectionPool implements AutoCloseable {
         return ds;
     }
 
-    /** Crea un gestor de transacciones {@link TransactionManager} asociado a este pool de conexiones */
-    public void setTransactionManager() {
-        setTransactionManager(null);
+    /**
+     * Crea un gestor de transacciones asociado a este pool de conexiones.
+     * @return El gestor de transacciones creado.
+     */
+    public TransactionManager initTransactionManager() {
+        return initTransactionManager(null);
     }
 
     /**
-     * Crea un gestor de transacciones asociado a este pool de conexiones.
-     * @param configurer Configurador adicional para el gestor de transacciones. Si {@code null}, no se aplica ninguna.
+     * Intenta crear un gestor de transacciones asociado a este pool de conexiones.
+     * @param map Mapa con entradas clave-listener para añadir los listeners al gestor de transacciones.
+     * Tenga presente que si el orden de ejecución de los listeners es importante, debe usar
+     * un {@link java.util.LinkedHashMap} o similar para que se preserve el orden de inserción.
+     * Si el mapa es {@code null}, no se añadirá ningún listener al gestor de transacciones.
+     * @return El gestor de transacciones creado.
      */
-    public void setTransactionManager(Consumer<TransactionManager> configurer) {
+    public TransactionManager initTransactionManager(Map<String, EventListener> map) {
         if(!isOpen()) throw new IllegalStateException("El ConnectionPool está cerrado");
 
-        try {
-            TransactionManager tm = TransactionManager.create(key, ds);
-            if(configurer != null) configurer.accept(tm);
-            logger.debug("Creado un gestor de transacciones asociado a la clave {} de este ConnectionPool", key);
-        } catch(IllegalStateException e) {
-            logger.warn("Ya existe un gestor de transacciones asociado a la clave {}. Quizás lo creó manualmente.", key);
-        }
+        TransactionManager tm = TransactionManager.create(key, ds);
+        if(map != null) map.forEach(tm::addListener);
+        logger.debug("Creado un gestor de transacciones asociado a la clave {} de este ConnectionPool", key);
+        return tm;
     }
 
     /**
