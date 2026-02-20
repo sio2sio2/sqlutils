@@ -122,6 +122,7 @@ class Transaction {
         // La transacción sólo empieza realmente en el primer nivel de anidamiento.
         if(level_a++ > 0) {
             logger.trace("Transacción anidada asociada a la conexión '{}'. Nivel actual: {}", tmKey, level_a);
+            listeners.values().forEach(l -> l.onTransactionStart(getEventListenerContext(l)));
             return;
         }
 
@@ -144,6 +145,11 @@ class Transaction {
         boolean wasRoot = level_a == 1;
 
         if(level_a == 0) throw new IllegalStateException("La transacción no ha comenzado");
+
+        if(!wasRoot) {
+            logger.trace("Commit en transacción anidada asociada a la conexión '{}'. Nivel actual: {}", tmKey, level_a);
+            reverseListeners().forEach(l -> l.onTransactionEnd(getEventListenerContext(l)));
+        }
 
         level_a--;
 
@@ -177,6 +183,12 @@ class Transaction {
         boolean wasRoot = level_a == 1;
 
         if(level_a == 0) throw new IllegalStateException("La transacción no ha comenzado");
+
+        if(!wasRoot) {
+            logger.trace("Rollback en transacción anidada asociada a la conexión '{}'. Nivel actual: {}", tmKey, level_a);
+            reverseListeners().forEach(l -> l.onTransactionEnd(getEventListenerContext(l)));
+        }
+
         level_a--;
 
         SQLException rollbackException = null;

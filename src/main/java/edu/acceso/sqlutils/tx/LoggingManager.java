@@ -35,7 +35,7 @@ public class LoggingManager implements EventListener {
      * @param failMessage El mensaje que se registrará si la transacción se revierte
      * (rollback).
      */
-    public void add(TransactionContext context, String logger, Level level, String successMessage, String failMessage) {
+    public void sendMessage(TransactionContext context, String logger, Level level, String successMessage, String failMessage) {
         @SuppressWarnings("unchecked")
         List<Message> messages = (List<Message>) context.getResource(KEY);
 
@@ -50,8 +50,8 @@ public class LoggingManager implements EventListener {
      * @param successMessage El mensaje que se registrará si la transacción se confirma (commit).
      * @param failMessage El mensaje que se registrará si la transacción se revierte (rollback).
      */
-    public void add(TransactionContext context, Class<?> clazz, Level level, String successMessage, String failMessage) {
-        add(context, clazz.getName(), level, successMessage, failMessage);
+    public void sendMessage(TransactionContext context, Class<?> clazz, Level level, String successMessage, String failMessage) {
+        sendMessage(context, clazz.getName(), level, successMessage, failMessage);
     }
 
     @Override

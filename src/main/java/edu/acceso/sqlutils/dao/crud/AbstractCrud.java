@@ -12,7 +12,7 @@ import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.mapper.SqlTypesTranslator;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
 import edu.acceso.sqlutils.dao.tx.Cache;
-import edu.acceso.sqlutils.dao.tx.CacheManager;
+import edu.acceso.sqlutils.dao.tx.CacheListener;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.tx.LoggingManager;
 import edu.acceso.sqlutils.tx.TransactionContext;
@@ -200,7 +200,7 @@ public abstract class AbstractCrud<E extends Entity> implements MinimalCrudInter
      * @return La caché de la transacción actual.
      */
     public Cache getCache() {
-        return (Cache) tm.getContext().getResource(CacheManager.KEY);
+        return (Cache) tm.getContext().getResource(CacheListener.KEY);
     }
 
     /**
@@ -213,7 +213,7 @@ public abstract class AbstractCrud<E extends Entity> implements MinimalCrudInter
     protected void sendLogMessage(String name, Level level, String successMessage, String failMessage) {
         TransactionContext context = tm.getContext();
         LoggingManager loggerManager = TransactionManager.get(tm.getKey()).getContext().getEventListener(LoggingManager.KEY, LoggingManager.class);
-        loggerManager.add(context, name, level, successMessage, failMessage);
+        loggerManager.sendMessage(context, name, level, successMessage, failMessage);
     }
 
     /**

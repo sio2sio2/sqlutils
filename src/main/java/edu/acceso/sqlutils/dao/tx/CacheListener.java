@@ -9,10 +9,9 @@ import edu.acceso.sqlutils.tx.EventListenerContext;
 /**
  * Listener de eventos que `permite agregar una caché de objetos a la transacción,
  * de forma que se puedan reutilizar objetos cargados en esa transacción.
- * <p>Este listener es un ejemplo de cómo se pueden usar
  */
-public class CacheManager implements EventListener {
-    private static final Logger logger = LoggerFactory.getLogger(CacheManager.class);
+public class CacheListener implements EventListener {
+    private static final Logger logger = LoggerFactory.getLogger(CacheListener.class);
 
     /**
      * Clave identificativa del gestor de caché.

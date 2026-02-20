@@ -39,4 +39,18 @@ public interface EventListener {
         onCommit(context);
         onRollback(context);
     }
+
+    /**
+     * Evento que se dispara al iniciar una transacción anidada que no es la raíz.
+     * @param context El contexto del listener para la transacción actual.
+     */
+    default void onTransactionStart(EventListenerContext context) {
+    }
+
+    /**
+     * Evento que se dispara al acabar una transacción anidada que no es la raíz.
+     * @param context El contexto del listener para la transacción actual.
+     */
+    default void onTransactionEnd(EventListenerContext context) {
+    }   
 }

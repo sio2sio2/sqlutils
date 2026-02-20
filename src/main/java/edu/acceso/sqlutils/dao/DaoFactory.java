@@ -15,7 +15,7 @@ import edu.acceso.sqlutils.dao.crud.simple.SimpleCrudInterface;
 import edu.acceso.sqlutils.dao.mapper.EntityMapper;
 import edu.acceso.sqlutils.dao.relations.LoaderFactory;
 import edu.acceso.sqlutils.dao.relations.RelationLoader;
-import edu.acceso.sqlutils.dao.tx.CacheManager;
+import edu.acceso.sqlutils.dao.tx.CacheListener;
 import edu.acceso.sqlutils.tx.LoggingManager;
 import edu.acceso.sqlutils.tx.TransactionManager;
 
@@ -50,7 +50,7 @@ public class DaoFactory implements AutoCloseable {
     private final LoggingManager logManager = new LoggingManager();
 
     /** Listener para implementar una caché de entidades */
-    private final CacheManager cacheManager = new CacheManager();
+    private final CacheListener cacheManager = new CacheListener();
 
     /**
      * Constructor privado para la fábrica de DAOs.
@@ -64,7 +64,7 @@ public class DaoFactory implements AutoCloseable {
         /** Gestor de transacciones con soporte para logging y cacheo */
         cp.initTransactionManager(Map.of(
             LoggingManager.KEY, logManager,
-            CacheManager.KEY, cacheManager)
+            CacheListener.KEY, cacheManager)
         );
         this.daoProvider = daoProvider;
         this.loaderClass = loaderClass;
