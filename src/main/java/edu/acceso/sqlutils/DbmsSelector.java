@@ -13,10 +13,10 @@ public enum DbmsSelector {
     SQLITE("jdbc:sqlite:<base>", "org.sqlite.JDBC"),
     MARIADB("jdbc:mariadb://[<host>[:<port>]]/<base>", "org.mariadb.jdbc.Driver"),
     MYSQL("jdbc:mysql://[<host>[:<port>]]/<base>", "com.mysql.cj.jdbc.Driver"),
-    POSTGRESQL("jdbc:postgresql://[<host>[:<port>]]/<base>", "org.postgresql.Driver"),
-    ORACLE("jdbc:oracle:thin:@//[<host>[:<port>]]/<base>", "oracle.jdbc.OracleDriver"),
+    POSTGRESQL("jdbc:postgresql:[//<host>[:<port>]/]<base>", "org.postgresql.Driver"),
+    ORACLE("jdbc:oracle:thin:@//[<host>[:<port>]/]<base>", "oracle.jdbc.OracleDriver"),
     MSSQL("jdbc:sqlserver://[<host>[:<port>];]databaseName=<base>", "com.microsoft.sqlserver.jdbc.SQLServerDriver"),
-    H2("jdbc:h2:tcp://[<host>[:<port>]]/<base>", "org.h2.Driver");
+    H2("jdbc:h2:[tcp://<host>[:<port>]/]<base>", "org.h2.Driver");
 
     private final String url;
     private final String driver;
@@ -37,10 +37,16 @@ public enum DbmsSelector {
      * @return URL de conexión JDBC
      */
     public String getUrl(String base, String host, Integer port) {
+        // Para Oracle y MSSQL siempre hay que expresar el host, aunque sea localhost.
+        host = switch(this) {
+            case ORACLE, MSSQL -> host == null ? "localhost" : host;
+            default -> host;
+        };
+
         return url
                 .replace("<base>", base)
                 .replace("[:<port>]", port != null ? ":" + port.toString() : "")
-                .replaceFirst("\\[<host>([^\\]]*)\\]", (host != null ? host : "localhost") + "$1");
+                .replaceFirst("\\[([^<]*)<host>([^\\]]*)\\]", (host != null ? "$1" + host + "$2" : (port == null ? "" : "$1" + "localhost" + "$2")));
     }
 
     /**
