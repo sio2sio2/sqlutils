@@ -11,7 +11,7 @@ import org.slf4j.event.Level;
  * Implementa un EventListener que permite deferir los mensajes
  * hasta que se conozca el resultado de la transacción (commit o rollback).
  */
-public class LoggingManager implements EventListener {
+public class LoggingManager extends ContextAwareEventListener {
     /**
      * Clave identificativa del gestor de registros.
      */
@@ -26,42 +26,41 @@ public class LoggingManager implements EventListener {
      */
     public static record Message(String logger, Level level, String successMessage, String failMessage) {}
 
+    @Override
+    public Object createResource() {
+        // Esta lista sirve para ir almacenando los mensajes que se desea posponer
+        // hasta conocer el resultao de la transacción.
+        return new ArrayList<Message>();
+    }
+
     /**
      * Agrega un mensaje a la lista de mensajes a posponer.
-     * @param context El contexto de la transacción actual.
      * @param logger El nombre del logger que se utilizará para registrar el mensaje.
      * @param level El nivel de log (INFO, ERROR, etc.) para el mensaje.
      * @param successMessage El mensaje que se registrará si la transacción se confirma (commit).
      * @param failMessage El mensaje que se registrará si la transacción se revierte
      * (rollback).
      */
-    public void sendMessage(TransactionContext context, String logger, Level level, String successMessage, String failMessage) {
-        @SuppressWarnings("unchecked")
-        List<Message> messages = (List<Message>) context.getResource(KEY);
+    public void sendMessage(String logger, Level level, String successMessage, String failMessage) {
+        List<Message> messages = getContext().getResource();
 
         messages.add(new Message(logger, level, successMessage, failMessage));
     }
 
     /**
      * Agrega un mensaje a la lista de mensajes a posponer utilizando la clase del logger.
-     * @param context El contexto de la transacción actual.
      * @param clazz La clase del logger que se utilizará para registrar el mensaje.
      * @param level El nivel de log (INFO, ERROR, etc.) para el mensaje.
      * @param successMessage El mensaje que se registrará si la transacción se confirma (commit).
      * @param failMessage El mensaje que se registrará si la transacción se revierte (rollback).
      */
-    public void sendMessage(TransactionContext context, Class<?> clazz, Level level, String successMessage, String failMessage) {
-        sendMessage(context, clazz.getName(), level, successMessage, failMessage);
+    public void sendMessage(Class<?> clazz, Level level, String successMessage, String failMessage) {
+        sendMessage(clazz.getName(), level, successMessage, failMessage);
     }
 
     @Override
-    public void onBegin(EventListenerContext context) {
-        context.setResource(new ArrayList<>());
-    }
-
-    @Override
-    public void onCommit(EventListenerContext context) {
-        List<Message> messages = context.getResource();
+    public void onCommit() {
+        List<Message> messages = getContext().getResource();
         messages.forEach(log -> {
             Logger logger = LoggerFactory.getLogger(log.logger());
             logger.atLevel(log.level()).log(log.successMessage());
@@ -69,8 +68,8 @@ public class LoggingManager implements EventListener {
     }
 
     @Override
-    public void onRollback(EventListenerContext context) {
-        List<Message> messages = context.getResource();
+    public void onRollback() {
+        List<Message> messages = getContext().getResource();
         messages.forEach(log -> {
             Logger logger = LoggerFactory.getLogger(log.logger());
             logger.atLevel(log.level()).log(log.failMessage());

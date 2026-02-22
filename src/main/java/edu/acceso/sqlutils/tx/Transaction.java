@@ -100,21 +100,6 @@ class Transaction {
                 }
                 return type.cast(listener);
             }
-
-            @Override
-            public Object getResource(String key) {
-               return resources_a.get(getEventListener(key));
-            }
-
-            @Override
-            public <T> T getResource(String key, Class<T> type) {
-                Object resource = getResource(key);
-                if(resource == null) return null;
-                if(!type.isInstance(resource)) {
-                    throw new IllegalStateException("El recurso asociado al listener con clave '%s' no es del tipo esperado ".formatted(key));
-                }
-                return type.cast(resource);
-            }
         };
     }   
 
@@ -122,13 +107,23 @@ class Transaction {
         // La transacción sólo empieza realmente en el primer nivel de anidamiento.
         if(level_a++ > 0) {
             logger.trace("Transacción anidada asociada a la conexión '{}'. Nivel actual: {}", tmKey, level_a);
-            listeners.values().forEach(l -> l.onTransactionStart(getEventListenerContext(l)));
+            listeners.values().forEach(EventListener::onTransactionStart);
             return;
         }
 
         try {
             conn.setAutoCommit(false);
-            listeners.values().forEach(l -> l.onBegin(getEventListenerContext(l)));
+            listeners.values().forEach(l -> {
+                // Si el listener necesita contexto y define cómo crear un recurso,
+                // se crea el recurso y se asocia al listener en su contexto antes de llamar a onBegin.
+                if(l instanceof ContextAwareEventListener cl) {
+                    Object resource = cl.createResource();
+                    if(resource != null) {
+                        getEventListenerContext(l).setResource(resource);
+                    }
+                }
+                l.onBegin();
+            });
         } catch(SQLException e) {
             logger.error("Error al iniciar la transacción asociada a la conexión '{}'", tmKey, e);
             throw new DataAccessException("Error al iniciar la transacción", e);
@@ -148,7 +143,7 @@ class Transaction {
 
         if(!wasRoot) {
             logger.trace("Commit en transacción anidada asociada a la conexión '{}'. Nivel actual: {}", tmKey, level_a);
-            reverseListeners().forEach(l -> l.onTransactionEnd(getEventListenerContext(l)));
+            reverseListeners().forEach(EventListener::onTransactionEnd);
         }
 
         level_a--;
@@ -159,7 +154,7 @@ class Transaction {
 
         try {
             conn.commit();
-            reverseListeners().forEach(l -> l.onCommit(getEventListenerContext(l)));
+            reverseListeners().forEach(EventListener::onCommit);
         } catch(SQLException e) {
             logger.error("Error al hacer commit en la transacción asociada a la conexión '{}'", tmKey, e);
             commitException = e;
@@ -186,7 +181,7 @@ class Transaction {
 
         if(!wasRoot) {
             logger.trace("Rollback en transacción anidada asociada a la conexión '{}'. Nivel actual: {}", tmKey, level_a);
-            reverseListeners().forEach(l -> l.onTransactionEnd(getEventListenerContext(l)));
+            reverseListeners().forEach(EventListener::onTransactionEnd);
         }
 
         level_a--;
@@ -196,7 +191,7 @@ class Transaction {
         if(wasRoot) {
             try {
                 conn.rollback();
-                reverseListeners().forEach(l -> l.onRollback(getEventListenerContext(l)));
+                reverseListeners().forEach(EventListener::onRollback);
             } catch(SQLException e) {
                 logger.error("Error al hacer rollback en la transacción asociada a la conexión '{}'", tmKey, e);
                 rollbackException = e;

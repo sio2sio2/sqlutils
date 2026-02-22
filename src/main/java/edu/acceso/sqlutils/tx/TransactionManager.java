@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.function.Supplier;
 
 import javax.sql.DataSource;
 
@@ -234,6 +235,18 @@ public class TransactionManager {
     public void addListener(String key, EventListener listener) {
         if(listenerKeys.putIfAbsent(key, listener) != null) throw new IllegalStateException("Ya hay un listener registrado con la clave '%s'".formatted(key));
         listeners.add(listener);
+
+        // Si el listener es context-aware, le proporcionamos un mecanismo para que pueda acceder
+        // al contexto de la transacción actual en cualquier momento.
+        if(listener instanceof ContextAwareEventListener contextAware) {
+            Supplier<EventListenerContext> supplier = () -> {
+                if(!isActive()) throw new IllegalStateException("No hay ninguna transacción activa en el hilo '%s'".formatted(Thread.currentThread().getName()));
+                Transaction tx = contextHolder.get();
+                return tx.getEventListenerContext(listener);
+            };
+
+            contextAware.setContextSupplier(supplier);
+        }
     }
 
     /**

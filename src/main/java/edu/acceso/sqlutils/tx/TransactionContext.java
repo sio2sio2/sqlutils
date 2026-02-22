@@ -43,20 +43,4 @@ public interface TransactionContext {
      * @return El listener solicitado, o {@code null} si no existe ningún listener asociado a esa clave.
      */
     public <T extends EventListener> T getEventListener(String key, Class<T> type);
-
-    /**
-     * Devuelve el recurso asociado al listeners identificado por la clave proporcionada.
-     * @param key La clave que identifica al listener.
-     * @return El recurso solicitado, o {@code null} si no existe ningún recurso asociado a esa clave.
-     */
-    public Object getResource(String key);
-
-    /**
-     * Devuelve el recurso asociado al listener identificado por la clave proporcionada.
-     * @param <T> El tipo del recurso a obtener.
-     * @param key La clave que identifica al listener.
-     * @param type La clase del recurso solicitado.
-     * @return El recurso solicitado, o {@code null} si no existe ningún recurso asociado a esa clave.
-     */
-    public <T> T getResource(String key, Class<T> type);
 }

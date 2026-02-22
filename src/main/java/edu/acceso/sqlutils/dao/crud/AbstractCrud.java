@@ -15,7 +15,6 @@ import edu.acceso.sqlutils.dao.tx.Cache;
 import edu.acceso.sqlutils.dao.tx.CacheListener;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.tx.LoggingManager;
-import edu.acceso.sqlutils.tx.TransactionContext;
 import edu.acceso.sqlutils.tx.TransactionManager;
 
 /** 
@@ -200,7 +199,8 @@ public abstract class AbstractCrud<E extends Entity> implements MinimalCrudInter
      * @return La caché de la transacción actual.
      */
     public Cache getCache() {
-        return (Cache) tm.getContext().getResource(CacheListener.KEY);
+        CacheListener cacheManager = TransactionManager.get(tm.getKey()).getContext().getEventListener(CacheListener.KEY, CacheListener.class);
+        return cacheManager.getCache();
     }
 
     /**
@@ -211,9 +211,8 @@ public abstract class AbstractCrud<E extends Entity> implements MinimalCrudInter
      * @param failMessage El mensaje que se registrará si la transacción se revierte (rollback).
      */
     protected void sendLogMessage(String name, Level level, String successMessage, String failMessage) {
-        TransactionContext context = tm.getContext();
         LoggingManager loggerManager = TransactionManager.get(tm.getKey()).getContext().getEventListener(LoggingManager.KEY, LoggingManager.class);
-        loggerManager.sendMessage(context, name, level, successMessage, failMessage);
+        loggerManager.sendMessage(name, level, successMessage, failMessage);
     }
 
     /**
