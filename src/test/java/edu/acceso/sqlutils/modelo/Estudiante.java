@@ -3,7 +3,7 @@ package edu.acceso.sqlutils.modelo;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 
-import edu.acceso.sqlutils.crud.Entity;
+import edu.acceso.sqlutils.orm.minimal.Entity;
 
 /**
  * Modela un estudiante.

@@ -9,20 +9,20 @@ import org.slf4j.LoggerFactory;
 
 import edu.acceso.sqlutils.ArchivoWrapper;
 import edu.acceso.sqlutils.Config;
+import edu.acceso.sqlutils.DbmsSelector;
 import edu.acceso.sqlutils.SqlUtils;
 import edu.acceso.sqlutils.backend.mappers.CentroMapper;
 import edu.acceso.sqlutils.backend.mappers.EstudianteMapper;
-import edu.acceso.sqlutils.crud.Entity;
-import edu.acceso.sqlutils.dao.DaoFactory;
-import edu.acceso.sqlutils.dao.crud.DaoProvider;
-import edu.acceso.sqlutils.dao.crud.SqlQueryFactory;
-import edu.acceso.sqlutils.dao.crud.simple.SimpleListCrud;
-import edu.acceso.sqlutils.dao.crud.simple.SimpleSqlQuery;
-import edu.acceso.sqlutils.dao.crud.simple.SimpleSqlQueryGeneric;
-import edu.acceso.sqlutils.dao.relations.LoaderFactory;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.modelo.Centro;
 import edu.acceso.sqlutils.modelo.Estudiante;
+import edu.acceso.sqlutils.orm.DaoFactory;
+import edu.acceso.sqlutils.orm.SqlQueryFactory;
+import edu.acceso.sqlutils.orm.minimal.Entity;
+import edu.acceso.sqlutils.orm.relations.LoaderFactory;
+import edu.acceso.sqlutils.orm.simple.crud.SimpleListCrud;
+import edu.acceso.sqlutils.orm.simple.query.SimpleSqlQuery;
+import edu.acceso.sqlutils.orm.simple.query.SimpleSqlQueryGeneric;
 
 
 /**
@@ -71,25 +71,25 @@ public class Conexion {
         if(instance != null) throw new IllegalStateException("La conexión ya se inicializó");
 
         Config config = Config.getInstance();
-        // Se configura cuáles son las sentencias SQL para las operaciones CRUD.
-        SqlQueryFactory sqlQueryFactory = SqlQueryFactory.Builder.create("centros")
+
+
+        // No es necesario definir este constructor de fábrica de consultas SQL, porque es el genérico y
+        // el DaoFactory se encarga de construirlo automáticamente, si no se le facilita uno.
+        SqlQueryFactory.Builder<?> sqlQueryBuilder = SqlQueryFactory.Builder.create(SimpleSqlQuery.class)
                 // No es necesario, porque se usa la implementación genérica,
                 // pero se muestra como ejemplo de cómo se puede usar una distinta con otro SGBD.
-                .register("sqlite", SimpleSqlQueryGeneric.class)
+                .register(DbmsSelector.SQLITE, SimpleSqlQueryGeneric.class)
                 // Para todos los SGBD se usa la implementación genérica.
-                .register("*", SimpleSqlQueryGeneric.class)
-                .get();
-        Class<? extends SimpleSqlQuery> sqlQueryClass = sqlQueryFactory.createSqlQuery(config.getDbUrl());
+                .register("*", SimpleSqlQueryGeneric.class);
 
-        // Se define cuáles son las operaciones CRUD que implementarán los DAO.
-        DaoProvider daoProvider = new DaoProvider(SimpleListCrud.class, sqlQueryClass);
 
         // Se define la fábrica de objetos DAO a partir de los mappers de las entidades.
         // Para la obtención de relaciones se usa carga perezosa (Lazy Loading).
-        DaoFactory daoFactory = DaoFactory.Builder.create(DB_KEY, daoProvider)
+        // sqlQueryBuilder podría no pasarse.
+        DaoFactory daoFactory = DaoFactory.Builder.create(DB_KEY, SimpleListCrud.class, LoaderFactory.LAZY, sqlQueryBuilder)
             .registerMapper(CentroMapper.class)
             .registerMapper(EstudianteMapper.class)
-            .get(LoaderFactory.LAZY, config.getDbUrl(), config.getUser(), config.getPassword());
+            .get(config.getDbUrl(), config.getUser(), config.getPassword());
 
         instance = new Conexion(daoFactory)
             .inicializar(config.getInput());

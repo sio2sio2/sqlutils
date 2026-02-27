@@ -8,6 +8,9 @@ import java.util.function.Supplier;
  */
 public abstract class ContextAwareEventListener implements EventListener {
     
+    /**
+     * Crea un contexto que incluye un recurso específico para el listener.
+     */
     private Supplier<EventListenerContext> contextSupplier;
 
     /**

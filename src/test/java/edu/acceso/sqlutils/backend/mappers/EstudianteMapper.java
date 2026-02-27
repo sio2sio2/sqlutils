@@ -1,9 +1,9 @@
 package edu.acceso.sqlutils.backend.mappers;
 
-import edu.acceso.sqlutils.dao.mapper.Column;
-import edu.acceso.sqlutils.dao.mapper.EntityMapper;
-import edu.acceso.sqlutils.dao.mapper.TableInfo;
 import edu.acceso.sqlutils.modelo.Estudiante;
+import edu.acceso.sqlutils.orm.mapper.Column;
+import edu.acceso.sqlutils.orm.mapper.EntityMapper;
+import edu.acceso.sqlutils.orm.mapper.TableInfo;
 
 /**
  * DAO para la entidad Estudiante.

@@ -47,10 +47,22 @@ public class TransactionManager {
 
     /** Lista de listeners de eventos para todas las transacciones */
     private final Set<EventListener> listeners = new CopyOnWriteArraySet<>();
-    /** Mapa para almacenar claves asociadas a los listeners persistentes y así poderlos recuperar luego */
+    /** 
+     * Mapa para almacenar claves asociadas a los listeners persistentes y así poderlos recuperar
+     * en cualquier momento. La clave puede ser arbitriaria, pero se recomienda usar una constante
+     * estática en la clase del listener para evitar colisiones. Véase {@link LoggingManager#KEY} como ejemplo.
+     */
     private final Map<String, EventListener> listenerKeys = new ConcurrentHashMap<>();
 
-    /** Mapa para almacenar claves asociadas a los listeners efímeros */
+    /**
+     * Mapa para almacenar claves asociadas a los listeners efímeros.
+     * La clave puede ser arbitriaria, pero se recomienda usar una constante estática en la clase del listener.
+     * 
+     * <p>Estos listeners sólo son válidos para la próxima transacción del propio hilo, así que
+     * no hay problemas de concurrencia; y basta con usar un único mapa ordenado normal ({@link LinkedHashMap}),
+     * a diferencia de los listeners persistentes que sí tiene tienen problemas con la
+     * concurrencia y requieren dos estructuras de datos.
+     */
     private final ThreadLocal<Map<String, EventListener>> ephemeralListeners = ThreadLocal.withInitial(LinkedHashMap::new);
 
     /**
@@ -128,7 +140,7 @@ public class TransactionManager {
      * @return La conexión asociada a la transacción actual.
      */
     public Connection getConnection() {
-        return contextHolder.get().getContext().connection();
+        return getContext().connection();
     }
 
     /**

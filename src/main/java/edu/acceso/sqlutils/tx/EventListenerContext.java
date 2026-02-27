@@ -28,7 +28,7 @@ public interface EventListenerContext {
 
     /**
      * Obtiene el recurso asociado al listener en el contexto de la transacción
-     * @param type La clase del tipo del recurso a obtener.
+     * @param <T> La clase del tipo del recurso a obtener.
      * @return El recurso asociado al listener, o {@code null} si no se ha establecido ningún recurso.
      */
     public <T> T getResource();

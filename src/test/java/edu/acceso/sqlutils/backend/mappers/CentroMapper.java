@@ -1,11 +1,11 @@
 package edu.acceso.sqlutils.backend.mappers;
 
-import edu.acceso.sqlutils.dao.mapper.Column;
-import edu.acceso.sqlutils.dao.mapper.EntityMapper;
-import edu.acceso.sqlutils.dao.mapper.TableInfo;
-import edu.acceso.sqlutils.dao.mapper.Translator;
 import edu.acceso.sqlutils.modelo.Centro;
 import edu.acceso.sqlutils.modelo.Titularidad;
+import edu.acceso.sqlutils.orm.mapper.Column;
+import edu.acceso.sqlutils.orm.mapper.EntityMapper;
+import edu.acceso.sqlutils.orm.mapper.TableInfo;
+import edu.acceso.sqlutils.orm.mapper.Translator;
 
 /**
  * DAO para la entidad Centro.

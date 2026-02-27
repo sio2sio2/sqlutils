@@ -1,2 +1,2 @@
-/** Paquete que contiene clases relacionadas con la gestión de transacciones */
+/** Paquete que implementa un soporte avanzado de transacciones */
 package edu.acceso.sqlutils.tx;
