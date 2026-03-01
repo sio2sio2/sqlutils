@@ -85,6 +85,9 @@ public class LazyLoader<E extends Entity> extends RelationLoader<E> {
                 case "getId" -> id;  // Para el ID no hace falta recuperar el objeto real.
                 default -> {
                     if(!loader.isAlreadyLoaded()) {
+                        if(!loader.data.tm().isActive()) {
+                            throw new DataAccessException("Evaluación perezosa fallida: no hay transacción activa para cargar la entidad '%s' con ID %d".formatted(loader.getEntityClass().getSimpleName(), id));
+                        }
                         E realEntity = loader.dao.get(id).orElseThrow(
                             () -> new DataAccessException(String.format("Error de integridad referencial: no se encontró la entidad %s con ID %d", loader.getEntityClass().getSimpleName(), id))
                         );

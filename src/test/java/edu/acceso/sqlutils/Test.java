@@ -122,5 +122,15 @@ public class Test {
         } catch (DataAccessException e) {
             System.err.println("Error al obtener la lista de centros: " + e.getMessage());
         }
+
+
+        // Listaos estudiantes usando getList
+        System.out.println("-- \nLista de estudiantes:");
+        try {
+            List<Estudiante> estudiantes = conexion.transactionR(() -> estudianteDao.getList());
+            estudiantes.forEach(System.out::println);
+        } catch (DataAccessException e) {
+            System.err.println("Error al obtener la lista de estudiantes: " + e.getMessage());
+        }
     }
 }
