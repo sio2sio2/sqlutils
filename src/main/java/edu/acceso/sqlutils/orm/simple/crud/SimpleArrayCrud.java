@@ -4,6 +4,7 @@ import java.lang.reflect.Array;
 import java.util.stream.Stream;
 
 import edu.acceso.sqlutils.errors.DataAccessException;
+import edu.acceso.sqlutils.orm.DaoFactory.DaoData;
 import edu.acceso.sqlutils.orm.minimal.Entity;
 import edu.acceso.sqlutils.orm.relations.RelationLoader;
 import edu.acceso.sqlutils.orm.simple.query.SimpleSqlQuery;
@@ -25,6 +26,15 @@ public class SimpleArrayCrud<T extends Entity> extends SimpleCrud<T> {
 
     /**
      * Constructor que crea una nueva instancia de {@link SimpleArrayCrud} a partir de otro {@link SimpleArrayCrud}.
+     * @param original El DAO que se toma como base.
+     * @param newData Los nuevos datos que caracterizan al nuevo DAO.
+     */
+    protected SimpleArrayCrud(SimpleArrayCrud<T> original, DaoData newData) {
+        super(original, newData);
+    }
+
+    /**
+     * Constructor que crea una nueva instancia de {@link SimpleArrayCrud} a partir de otro {@link SimpleArrayCrud}.
      * 
      * <p>
      * Este objeto {@link SimpleArrayCrud} se construye compartiendo los mismos parámeros que el DAO original
@@ -35,6 +45,11 @@ public class SimpleArrayCrud<T extends Entity> extends SimpleCrud<T> {
      */
     public SimpleArrayCrud(RelationLoader<T> rl) {
         super(rl);
+    }
+
+    @Override
+    public SimpleArrayCrud<T> with(DaoData newData) {
+        return new SimpleArrayCrud<>(this, newData);
     }
 
     @SuppressWarnings("unchecked")

@@ -11,7 +11,7 @@ import edu.acceso.sqlutils.ConnectionPool;
 import edu.acceso.sqlutils.DbmsSelector;
 import edu.acceso.sqlutils.orm.mapper.EntityMapper;
 import edu.acceso.sqlutils.orm.minimal.Entity;
-import edu.acceso.sqlutils.orm.relations.LoaderFactory;
+import edu.acceso.sqlutils.orm.relations.FetchPlan;
 import edu.acceso.sqlutils.orm.relations.RelationLoader;
 import edu.acceso.sqlutils.orm.simple.crud.SimpleCrudInterface;
 import edu.acceso.sqlutils.orm.simple.query.SimpleSqlQuery;
@@ -30,9 +30,6 @@ public class DaoFactory implements AutoCloseable {
     /** Logger para registrar información y errores. */
     private static final Logger logger = LoggerFactory.getLogger(DaoFactory.class);
 
-    /** Clave para la caché de entidades en el gestor de transacciones */
-    public static final String CACHE_RESOURCE_KEY = new Object().toString();
-
     /**
      * Instancias de DaoFactory para implementar un patrón Multiton.
      */
@@ -46,8 +43,8 @@ public class DaoFactory implements AutoCloseable {
     /** Clase que implementa las operaciones CRUD */
     private final Class<? extends AbstractCrud<?>> crudClass;
     private final ConnectionPool cp;
-    /** Clase que implementa el cargador de relaciones. */
-    private final Class<? extends RelationLoader<? extends Entity>> loaderClass;
+    /** Plan predefinido para la carga de relaciones */
+    private final FetchPlan fetchPlan;
 
     /** Listener para posponer el registro de mensajes hasta que culmine la transacción */
     private final LoggingManager logManager = new LoggingManager();
@@ -62,7 +59,7 @@ public class DaoFactory implements AutoCloseable {
      * @param tm Gestor de transacciones que utiliza la fábrica de DAOs.
      * @param sqlQueryFactory Fábrica de consultas SQL que utiliza la fábrica de DAOs.
      * @param crudClass Clase que implementa las operaciones CRUD.
-     * @param loaderClass Clase que implementa el cargador de relaciones.
+     * @param fetchPlan Plan predefinido para la carga de relaciones.
      * @param mappers Mapa con los mapeadores de las entidades que constituyen la base de datos.
      */
     public static record DaoData(
@@ -71,10 +68,18 @@ public class DaoFactory implements AutoCloseable {
         TransactionManager tm,
         SqlQueryFactory sqlQueryFactory,
         Class<? extends AbstractCrud<?>> crudClass,
-        Class<? extends RelationLoader<? extends Entity>> loaderClass,
-        Map<Class<? extends Entity>,
-        EntityMapper<? extends Entity>> mappers
+        FetchPlan fetchPlan,
+        Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers
     ) {
+
+        /**
+         * Define un nuevo registro con otro fetchPlan y el resto de datos iguales.
+         * @param fetchPlan Nuevo plan predefinido para la carga de relaciones.
+         * @return Un nuevo registro con el fetchPlan especificado y el resto de datos iguales.
+         */
+        public DaoData with(FetchPlan fetchPlan) {
+            return new DaoData(key, cp, tm, sqlQueryFactory, crudClass, fetchPlan, mappers);
+        }
 
         /**
          * Obtiene el gestor de logging para poder posponer los mensajes
@@ -102,10 +107,10 @@ public class DaoFactory implements AutoCloseable {
      * @param cp Pool de conexiones que utiliza la fábrica de DAOs.
      * @param sqlQueryFactory Fábrica de consultas SQL que utiliza la fábrica de DAOs.
      * @param crudClass Clase que implementa las operaciones CRUD.
-     * @param loaderClass Clase que implementa el cargador de relaciones.
+     * @param fetchPlan Plan predefinido para la carga de relaciones.
      * @param mappers Mapa de mappers de entidades.
      */
-    private DaoFactory(ConnectionPool cp, SqlQueryFactory sqlQueryFactory, Class<? extends AbstractCrud<?>> crudClass, Class<? extends RelationLoader<? extends Entity>> loaderClass, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
+    private DaoFactory(ConnectionPool cp, SqlQueryFactory sqlQueryFactory, Class<? extends AbstractCrud<?>> crudClass, FetchPlan fetchPlan, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
         this.cp = cp;
         /** Gestor de transacciones con soporte para logging y cacheo */
         cp.initTransactionManager(Map.of(
@@ -114,7 +119,7 @@ public class DaoFactory implements AutoCloseable {
         );
         this.sqlQueryFactory = sqlQueryFactory;
         this.crudClass = crudClass;
-        this.loaderClass = loaderClass;
+        this.fetchPlan = fetchPlan;
         this.mappers = mappers;
     }
 
@@ -124,7 +129,7 @@ public class DaoFactory implements AutoCloseable {
      * @return La información de esta factoría.
      */
     public DaoData getDaoData() {
-        return new DaoData(getKey(), cp, cp.getTransactionManager(), sqlQueryFactory, crudClass, loaderClass, new HashMap<>(mappers));
+        return new DaoData(getKey(), cp, cp.getTransactionManager(), sqlQueryFactory, crudClass, fetchPlan, new HashMap<>(mappers));
     }
 
     /**
@@ -141,8 +146,10 @@ public class DaoFactory implements AutoCloseable {
          * Clase que implmenta las operaciones CRUD.
          */
         private final Class<? extends AbstractCrud<?>> crudClass;
-        /** Fabrica de cargadores de relaciones */
-        private final LoaderFactory loader;
+        /**
+         * Plan predefinido de carga de relaciones.
+         */
+        private FetchPlan fetchPlan = FetchPlan.EAGER;
         /**
          * Mapa de mappers de entidades.
          */
@@ -152,14 +159,12 @@ public class DaoFactory implements AutoCloseable {
          * Constructor privado para la clase Builder.
          * @param key Clave que identifica la conexión.
          * @param crudClass Clase que implementa el CRUD.
-         * @param loader Fabrica de cargadores de relaciones.
          * @param sqlQueryFactoryBuilder Constructor de la fábrica de consultas SQL.
          */
-        private Builder(String key, Class<? extends AbstractCrud<?>> crudClass, LoaderFactory loader, SqlQueryFactory.Builder<?> sqlQueryFactoryBuilder) {
+        private Builder(String key, Class<? extends AbstractCrud<?>> crudClass, SqlQueryFactory.Builder<?> sqlQueryFactoryBuilder) {
             this.key = key;
             this.sqlQueryFactoryBuilder = sqlQueryFactoryBuilder;
             this.crudClass = crudClass;
-            this.loader = loader;
         }
 
         /**
@@ -167,12 +172,11 @@ public class DaoFactory implements AutoCloseable {
          * @param <C> Tipo de clase que implementa el CRUD.
          * @param key Clave que identifica la conexión.
          * @param crudClass Clase que implementa el CRUD.
-         * @param loader Fabrica de cargadores de relaciones.
          * @param sqlQueryFactoryBuilder Constructor de la fábrica de consultas SQL.
          * @return Una nueva instancia de {@link DaoFactory.Builder}.
          */
-        public static <C extends AbstractCrud<?>>  Builder create(String key, Class<C> crudClass, LoaderFactory loader, SqlQueryFactory.Builder<?> sqlQueryFactoryBuilder) {
-            return new Builder(key, crudClass, loader, sqlQueryFactoryBuilder);
+        public static <C extends AbstractCrud<?>>  Builder create(String key, Class<C> crudClass, SqlQueryFactory.Builder<?> sqlQueryFactoryBuilder) {
+            return new Builder(key, crudClass, sqlQueryFactoryBuilder);
         }
 
         /**
@@ -182,11 +186,10 @@ public class DaoFactory implements AutoCloseable {
          * @param <C> Tipo de clase que implementa las operaciones CRUD.
          * @param key Clave que identifica la conexión.
          * @param crudClass Clase que implementa las operaciones CRUD.
-         * @param loader Fabrica de cargadores de relaciones.
          * @return Una nueva instancia de {@link DaoFactory.Builder}.
          */
-        public static <C extends AbstractCrud<?>>  Builder create(String key, Class<C> crudClass, LoaderFactory loader) {
-            return new Builder(key, crudClass, loader, null);
+        public static <C extends AbstractCrud<?>>  Builder create(String key, Class<C> crudClass) {
+            return new Builder(key, crudClass, null);
         }
 
         /**
@@ -206,6 +209,16 @@ public class DaoFactory implements AutoCloseable {
             mappers.put(entityClass, mapper);
             logger.trace("Registrado mapper '{}'' para la entidad '{}'", entityMapperClass.getSimpleName(), entityClass.getSimpleName());
             return this;
+        }
+
+        /**
+         * Define cuál debe ser el plan predefinido para la carga de relaciones
+         * @param fetchPlan Plan predefinido para la carga de relaciones
+         * @return El propio objeto para seguir encadenado la configuración
+         */
+        public Builder with(FetchPlan fetchPlan) {
+           this.fetchPlan = fetchPlan;
+           return this;
         }
 
         /**
@@ -238,9 +251,6 @@ public class DaoFactory implements AutoCloseable {
         public DaoFactory get(String dbUrl, String user, String password) {
 
             return instances.computeIfAbsent(key, k -> {
-                @SuppressWarnings("unchecked")
-                var loaderClass = (Class<? extends RelationLoader<? extends Entity>> ) loader.getLoaderClass();
-	    
                 ConnectionPool cp;
                 try {
                     cp = ConnectionPool.create(key, dbUrl, user, password);
@@ -249,7 +259,7 @@ public class DaoFactory implements AutoCloseable {
                 }
 
                 SqlQueryFactory sqlQueryFactory = getSqlQueryFactoryBuilder().get(DbmsSelector.fromUrl(dbUrl));
-                return new DaoFactory(cp, sqlQueryFactory, crudClass, loaderClass, new HashMap<>(mappers));
+                return new DaoFactory(cp, sqlQueryFactory, crudClass, fetchPlan, new HashMap<>(mappers));
             });
         }
     }
@@ -297,7 +307,7 @@ public class DaoFactory implements AutoCloseable {
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException(String.format("Error al crear la instancia de %s", crudClass.getSimpleName()), e);
         }
-    }
+    }    
 
     /**
      * Obtiene el gestor de transacciones para DAOs.

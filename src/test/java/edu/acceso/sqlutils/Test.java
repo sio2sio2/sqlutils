@@ -13,6 +13,7 @@ import edu.acceso.sqlutils.backend.Conexion;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.modelo.Centro;
 import edu.acceso.sqlutils.modelo.Estudiante;
+import edu.acceso.sqlutils.orm.relations.FetchPlan;
 
 public class Test {
     private static Logger logger = (Logger) LoggerFactory.getLogger(Test.class);
@@ -124,13 +125,22 @@ public class Test {
         }
 
 
-        // Listaos estudiantes usando getList
-        System.out.println("-- \nLista de estudiantes:");
+        // Listaos estudiantes usando getList 
+        System.out.println("-- \nLista de estudiantes (falla por carga perezosa):");
         try {
             List<Estudiante> estudiantes = conexion.transactionR(() -> estudianteDao.getList());
             estudiantes.forEach(System.out::println);
         } catch (DataAccessException e) {
             System.err.println("Error al obtener la lista de estudiantes: " + e.getMessage());
         }
+
+        System.out.println("-- \nLista de estudiantes (falla por carga perezosa):");
+        try {
+            List<Estudiante> estudiantes = conexion.transactionR(() -> estudianteDao.with(conexion.getDaoData().with(FetchPlan.EAGER)).getList());
+            estudiantes.forEach(System.out::println);
+        } catch (DataAccessException e) {
+            System.err.println("Error al obtener la lista de estudiantes: " + e.getMessage());
+        }
+
     }
 }

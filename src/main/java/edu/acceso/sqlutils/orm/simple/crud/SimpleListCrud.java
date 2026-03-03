@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import edu.acceso.sqlutils.errors.DataAccessException;
+import edu.acceso.sqlutils.orm.DaoFactory.DaoData;
 import edu.acceso.sqlutils.orm.minimal.Entity;
 import edu.acceso.sqlutils.orm.relations.RelationLoader;
 import edu.acceso.sqlutils.orm.simple.query.SimpleSqlQuery;
@@ -24,6 +25,15 @@ public class SimpleListCrud<T extends Entity> extends SimpleCrud<T> {
     }
 
     /**
+     * Constructor que crea una nueva instancia de {@link SimpleListCrud} a partir de otro {@link SimpleListCrud} y un nuevo {@link DaoData}.
+     * @param original El DAO original del que se copia la configuración.
+     * @param newData El nuevo {@link DaoData} que se utilizará en la nueva instancia de {@link SimpleListCrud}.
+     */
+    protected SimpleListCrud(SimpleListCrud<T> original, DaoData newData) {
+        super(original, newData);
+    }
+
+    /**
      * Constructor que crea una nueva instancia de {@link SimpleListCrud} a partir de otro {@link SimpleListCrud}.
      * 
      * <p>
@@ -35,6 +45,11 @@ public class SimpleListCrud<T extends Entity> extends SimpleCrud<T> {
      */
     public SimpleListCrud(RelationLoader<T> rl) {
         super(rl);
+    }
+
+    @Override
+    public SimpleListCrud<T> with(DaoData newData) {
+        return new SimpleListCrud<>(this, newData);
     }
 
     /**
