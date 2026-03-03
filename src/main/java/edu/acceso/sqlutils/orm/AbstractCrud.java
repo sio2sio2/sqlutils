@@ -10,6 +10,7 @@ import edu.acceso.sqlutils.orm.mapper.SqlTypesTranslator;
 import edu.acceso.sqlutils.orm.minimal.Entity;
 import edu.acceso.sqlutils.orm.minimal.crud.MinimalCrudInterface;
 import edu.acceso.sqlutils.orm.minimal.sql.MinimalSqlQuery;
+import edu.acceso.sqlutils.orm.relations.FetchPlan;
 import edu.acceso.sqlutils.orm.relations.RelationLoader;
 
 /** 
@@ -55,12 +56,33 @@ public abstract class AbstractCrud<E extends Entity> implements MinimalCrudInter
         this.originalLoader = null;
 
         this.sqlQuery = data.sqlQueryFactory().createSqlQuery(mapper);
-        logger.debug("Creado DAO para '{}' con '{}', con operaciones '{}[{}]' y usando como estrategia para carga de entidades foráneas '{}'.",
+        logger.debug("Creado DAO para '{}' con '{}', con operaciones '{}[{}]' y estrategia de carga '{}'.",
             entityClass.getSimpleName(),
             mapper.getClass().getSimpleName(),
             this.getClass().getSimpleName(),
             sqlQuery.getClass().getSimpleName(),
-            data.loaderClass().getSimpleName()
+            data.fetchPlan()
+        );
+    }
+
+    /**
+     * Constructor que crea una nueva instancia de {@link AbstractCrud} a partir de un DAO original y un nuevo {@link FetchPlan}.
+     * @param original DAO original del que se copian los parámetros.
+     * @param newData Nuevos datos que caracterizarán al nuevo DAO.
+     */
+    protected AbstractCrud(AbstractCrud<E> original, DaoData newData) {
+        this.data = newData;
+
+        this.entityClass = original.entityClass;
+        this.mapper = original.mapper;
+        this.originalLoader = original.originalLoader;
+        this.sqlQuery = original.sqlQuery;
+        logger.debug("Creado DAO clonado para '{}' con '{}', con operaciones '{}[{}]' y estrategia de carga '{}'.",
+            entityClass.getSimpleName(),
+            mapper.getClass().getSimpleName(),
+            this.getClass().getSimpleName(),
+            sqlQuery.getClass().getSimpleName(),
+            data.fetchPlan()
         );
     }
 
@@ -76,7 +98,7 @@ public abstract class AbstractCrud<E extends Entity> implements MinimalCrudInter
      */
     @SuppressWarnings("unchecked")
     public AbstractCrud(RelationLoader<E> rl) {
-        data = DaoFactory.get(rl.getKey()).getDaoData();
+        data = rl.getData();
         this.entityClass = rl.getEntityClass();
         mapper = (EntityMapper<E>) data.mappers().get(entityClass);
         if (mapper == null) {
@@ -99,19 +121,23 @@ public abstract class AbstractCrud<E extends Entity> implements MinimalCrudInter
     }
 
     /**
+     * Crea un nuevo DAO con el mismo DaoData pero con un nuevo FetchPlan.
+     * @param newData Nuevos datos que caracterizarán al nuevo DAO.
+     * @return El nuevo DAO solicitado.
+     */
+    public abstract AbstractCrud<E> with(DaoData newData);
+
+    /**
      * Crea una instancia de {@link RelationLoader}.
      * @param <T> Tipo de entidad que el RelationLoader se encargará de cargar.
      * @param entityClass Clase de la entidad que el {@link RelationLoader} se encargará de cargar.
      * @return La instancia solicitada.
      * @throws DataAccessException Si ocurre un error al crear la instancia.
      */
-    @SuppressWarnings("unchecked")
     public <T extends Entity> RelationLoader<T> createNewRelationLoader(Class<T> entityClass) throws DataAccessException {
-        try {
-            return (RelationLoader<T>) data.loaderClass().getConstructor(String.class, Class.class, RelationLoader.class).newInstance(getKey(), entityClass, originalLoader);
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException("Error al crear instancia de RelationLoader", e);
-        }
+        return originalLoader == null 
+            ? new RelationLoader<>(entityClass, data)
+            : new RelationLoader<>(entityClass, originalLoader);
     }
 
     /**

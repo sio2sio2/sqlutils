@@ -17,9 +17,10 @@ import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.modelo.Centro;
 import edu.acceso.sqlutils.modelo.Estudiante;
 import edu.acceso.sqlutils.orm.DaoFactory;
+import edu.acceso.sqlutils.orm.DaoFactory.DaoData;
 import edu.acceso.sqlutils.orm.SqlQueryFactory;
 import edu.acceso.sqlutils.orm.minimal.Entity;
-import edu.acceso.sqlutils.orm.relations.LoaderFactory;
+import edu.acceso.sqlutils.orm.relations.FetchPlan;
 import edu.acceso.sqlutils.orm.simple.crud.SimpleListCrud;
 import edu.acceso.sqlutils.orm.simple.query.SimpleSqlQuery;
 import edu.acceso.sqlutils.orm.simple.query.SimpleSqlQueryGeneric;
@@ -86,7 +87,8 @@ public class Conexion {
         // Se define la fábrica de objetos DAO a partir de los mappers de las entidades.
         // Para la obtención de relaciones se usa carga perezosa (Lazy Loading).
         // sqlQueryBuilder podría no pasarse.
-        DaoFactory daoFactory = DaoFactory.Builder.create(DB_KEY, SimpleListCrud.class, LoaderFactory.LAZY, sqlQueryBuilder)
+        DaoFactory daoFactory = DaoFactory.Builder.create(DB_KEY, SimpleListCrud.class, sqlQueryBuilder)
+            .with(FetchPlan.LAZY)
             .registerMapper(CentroMapper.class)
             .registerMapper(EstudianteMapper.class)
             .get(config.getDbUrl(), config.getUser(), config.getPassword());
@@ -133,6 +135,15 @@ public class Conexion {
             case "Estudiante" -> daoFactory.getDao(Estudiante.class);
             default -> throw new IllegalArgumentException("No hay DAO para la clase " + clazz.getSimpleName());
         };
+    }
+
+    /**
+     * Obtiene los datos de la fábrica de DAOs, para poder modificar
+     * con comodidad el plan de carga de relaciones al vuelo.
+     * @return Los datos solicitados.
+     */
+    public DaoData getDaoData() {
+        return daoFactory.getDaoData();
     }
 
     /**

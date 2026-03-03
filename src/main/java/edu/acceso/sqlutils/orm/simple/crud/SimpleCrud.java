@@ -14,6 +14,7 @@ import org.slf4j.event.Level;
 import edu.acceso.sqlutils.SqlUtils;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.orm.AbstractCrud;
+import edu.acceso.sqlutils.orm.DaoFactory.DaoData;
 import edu.acceso.sqlutils.orm.mapper.SqlTypesTranslator;
 import edu.acceso.sqlutils.orm.minimal.Entity;
 import edu.acceso.sqlutils.orm.relations.RelationLoader;
@@ -41,6 +42,26 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
     }
 
     /**
+     * Constructor que crea una nueva instancia de {@link SimpleCrud} a partir de otro {@link SimpleCrud}
+     * y con unos datos característicos nuevos.
+     * @param original El DAO que se toma como base.
+     * @param newData Los nuevos datos que caracterizan al nuevo DAO.
+     */
+    protected SimpleCrud(SimpleCrud<T> original, DaoData newData) {
+        super(original, newData);
+    }
+
+    /**
+     * Crea un nuevo DAO con el mismo DaoData pero con un nuevo FetchPlan.
+     * @param fetchPlan Nuevo plan de carga de relaciones para el nuevo DAO. El resto de parámetros se copian del DAO original.
+     * @return El nuevo DAO solicitado.
+     */
+    @Override
+    public SimpleCrud<T> with(DaoData newData) {
+        return new SimpleCrud<>(this, newData);
+    }
+
+    /**
      * Constructor que crea una nueva instancia de {@link SimpleCrud} a partir de un objeto {@link RelationLoader}.
      * 
      * <p>
@@ -53,6 +74,10 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         super(rl);
     }
 
+    /** 
+     * Método auxiliar para obtener las consultas SQL que utiliza este DAO.
+     * @return El {@link SimpleSqlQuery} asociado a este DAO.
+     */
     private SimpleSqlQuery getSqlQuery() {
         return (SimpleSqlQuery) sqlQuery;
     }
