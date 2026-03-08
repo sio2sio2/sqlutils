@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import javax.sql.DataSource;
@@ -41,6 +42,9 @@ public class TransactionManager {
 
     /** Instancias de gestores de transacciones accesibles por clave */
     private static final Map<String, TransactionManager> instances = new ConcurrentHashMap<>();
+
+    /** Contador para transacciones activas */
+    private final AtomicInteger activeTransactions = new AtomicInteger(0);
 
     /** Conexión por hilo para manejar transacciones anidadas */
     private final ThreadLocal<Transaction> contextHolder;
@@ -183,6 +187,7 @@ public class TransactionManager {
 
                 context = new Transaction(getKey(), ds.getConnection(), txListeners);
                 contextHolder.set(context);
+                activeTransactions.incrementAndGet();
             } catch (SQLException e) {
                 throw new DataAccessException("Error al obtener la conexión del DataSource", e);
             }
@@ -196,7 +201,10 @@ public class TransactionManager {
             context.rollback(e);
         }
         finally {
-            if(isNewTransaction) contextHolder.remove();
+            if(isNewTransaction) {
+                contextHolder.remove();
+                activeTransactions.decrementAndGet();
+            }
         }
 
         return value;
@@ -220,6 +228,18 @@ public class TransactionManager {
      */
     public boolean isActive() {
         return contextHolder.get() != null;
+    }
+
+    /**
+     * Cierra el gestor de transacciones, liberando los recursos asociados.
+     * @throws IllegalStateException Si hay transacciones activas en el momento del cierre.
+     */
+    public void close() {
+        if(activeTransactions.get() > 0) {
+            throw new IllegalStateException("No se puede cerrar el gestor de transacciones '%s' porque hay %d transacciones activas".formatted(getKey(), activeTransactions.get()));
+        }
+        instances.remove(getKey(), this);
+        logger.debug("Gestor de transacciones asociado a la clave '{}' cerrado", key);
     }
 
     /**

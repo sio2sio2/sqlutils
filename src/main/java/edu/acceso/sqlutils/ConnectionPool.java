@@ -32,6 +32,9 @@ public class ConnectionPool implements AutoCloseable {
     /** Número mínimo de conexiones en el pool */
     public static volatile short minConnections = 1;
 
+    /** El gestor de transacciones asociado a esta instancia. */
+    private TransactionManager tm;
+
     private final String key;
     private final HikariDataSource ds;
     private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -118,10 +121,7 @@ public class ConnectionPool implements AutoCloseable {
      * @return El DataSource asociado
      */
     public DataSource getDataSource() {
-        try {
-            TransactionManager.get(key);
-            logger.warn("Hay un gestor de transacciones asociado a este pool '%s'. A menos de que esté seguro de lo que hace, debería obtener las conexiones a través de él.".formatted(getKey()));
-        } catch(IllegalStateException e) {}
+        if(tm != null) logger.warn("Hay un gestor de transacciones asociado a este pool '%s'. A menos de que esté seguro de lo que hace, debería obtener las conexiones a través de él.".formatted(getKey()));
 
         return ds;
     }
@@ -144,8 +144,8 @@ public class ConnectionPool implements AutoCloseable {
      */
     public TransactionManager initTransactionManager(Map<String, EventListener> map) {
         if(!isOpen()) throw new IllegalStateException("El ConnectionPool está cerrado");
-
-        TransactionManager tm = TransactionManager.create(key, ds);
+        if(tm != null) throw new IllegalStateException("Ya hay un gestor de transacciones asociado a este pool '%s'. No se puede crear otro.".formatted(getKey())); 
+        tm = TransactionManager.create(key, ds);
         if(map != null) map.forEach(tm::addListener);
         logger.debug("Creado un gestor de transacciones asociado a la clave {} de este ConnectionPool", key);
         return tm;
@@ -157,16 +157,22 @@ public class ConnectionPool implements AutoCloseable {
      */
     public TransactionManager getTransactionManager() {
         if(!isOpen()) throw new IllegalStateException("El ConnectionPool está cerrado");
-        try {
-            return TransactionManager.get(key);
-        } catch(IllegalStateException e) {
-            throw new IllegalStateException("No hay un gestor de transacciones asociado al pool '%s'. Debe crearlo primero con setTransactionManager().".formatted(getKey()));
-        }
+        if(tm == null) throw new IllegalStateException("No hay un gestor de transacciones asociado al pool '%s'. Debe crearlo primero con initTransactionManager().".formatted(getKey()));
+        return tm;
     }
 
+    /**
+     * Cierra el pool de conexiones, liberando los recursos asociados, siempre
+     * que no existan transacciones activas.
+     * @throws IllegalStateException Si hay transacciones activas asociadas a este pool de conexiones.
+     */
     @Override
     public void close() {
         if(closed.compareAndSet(false, true)) {
+            if(tm != null) {
+                tm.close();
+                tm = null;
+            }
             instances.remove(key, this);
             ds.close();
             logger.debug("Pool de conexiones cerrado para la clave {}", key);
