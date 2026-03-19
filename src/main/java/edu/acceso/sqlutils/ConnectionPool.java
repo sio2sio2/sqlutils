@@ -146,7 +146,7 @@ public class ConnectionPool implements AutoCloseable {
         if(!isOpen()) throw new IllegalStateException("El ConnectionPool está cerrado");
         if(tm != null) throw new IllegalStateException("Ya hay un gestor de transacciones asociado a este pool '%s'. No se puede crear otro.".formatted(getKey())); 
         tm = TransactionManager.create(key, ds);
-        if(map != null) map.forEach(tm::addListener);
+        if(map != null) map.forEach(tm::addEventListener);
         logger.debug("Creado un gestor de transacciones asociado a la clave {} de este ConnectionPool", key);
         return tm;
     }

@@ -1,23 +1,22 @@
 package edu.acceso.sqlutils;
 
 import java.sql.Statement;
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -147,44 +146,129 @@ public class SqlUtils {
         return resultSetToStream(conn, stmt, rs).map(checkedToUnchecked(mapper));
     }
 
+    private static enum SqlScriptState {
+        NORMAL,
+        IN_STRING_LITERAL,
+        IN_SINGLE_LINE_COMMENT,
+        IN_MULTI_LINE_COMMENT;
+    }
+
+    private static enum BlockType {
+        BEGIN_END("BEGIN", "END"),
+        CASE_END("CASE", "END");
+
+        private final String startKeyword;
+        private final String endKeyword;
+
+        private BlockType(String startKeyword, String endKeyword) {
+            this.startKeyword = startKeyword;
+            this.endKeyword = endKeyword;
+        }
+
+        public String getStartKeyword() {
+            return startKeyword;
+        }
+
+        public String getEndKeyword() {
+            return endKeyword;
+        }
+
+        public static BlockType fromStartKeyword(String keyword) {
+            return Arrays.stream(values())
+                .filter(bt -> bt.getStartKeyword().equalsIgnoreCase(keyword))
+                .findFirst()
+                .orElse(null);
+        }
+    }
+
     /**
      * Descompone un guión SQL en las sentencias de que se compone.
-     * @param st Entrada de la que se lee el guión
+     * @param sql Cadena que contiene el guión SQL completo.
      * @return  Una lista con las sentencias separadadas.
      * @throws IOException Si ocurre un error al leer el flujo de entrada.
+     * @throws SQLException Si se detecta bloques SQL sin cerrar.
      */
-    public static List<String> splitSQL(InputStream st) throws IOException {
-        Pattern beginPattern = Pattern.compile("\\b(BEGIN|CASE)\\b", Pattern.CASE_INSENSITIVE);
-        Pattern endPattern = Pattern.compile("\\bEND\\b", Pattern.CASE_INSENSITIVE);
+    public static List<String> splitSQL(String sql) throws IOException, SQLException {
+        int idx = 0;
+        int length = sql.length();
+        SqlScriptState state = SqlScriptState.NORMAL;
+        StringBuilder currentStatement = new StringBuilder();
+        Deque<BlockType> blockStack = new ArrayDeque<>();
 
-        try (
-            InputStreamReader sr = new InputStreamReader(st, StandardCharsets.UTF_8);
-            BufferedReader br = new BufferedReader(sr);
-        ) {
-            List<String> sentencias = new ArrayList<>();
-            String linea;
-            String sentencia = "";
-            int contador = 0;
-            while((linea = br.readLine()) != null) {
-                linea = linea.trim();
-                if(linea.isEmpty()) continue;
+        List<String> statements = new ArrayList<>();
 
-                Matcher beginMatcher = beginPattern.matcher(linea);
-                Matcher endMatcher = endPattern.matcher(linea);
+        while(idx < length) {
+            char c = sql.charAt(idx);
 
-                while(beginMatcher.find()) contador++;
-                while(endMatcher.find()) contador--;
+            switch(state) {
+                case NORMAL:
+                    if(c == '-' && idx + 1 < length && sql.charAt(idx + 1) == '-') {
+                        state = SqlScriptState.IN_SINGLE_LINE_COMMENT;
+                        idx++;
+                    }
+                    else if(c == '/' && idx + 1 < length && sql.charAt(idx + 1) == '*') {
+                        state = SqlScriptState.IN_MULTI_LINE_COMMENT;
+                        idx++;
+                    }
+                    else if(c == '\'') {
+                        state = SqlScriptState.IN_STRING_LITERAL;
+                        currentStatement.append(c);
+                    }
+                    else if(c == ';' && blockStack.isEmpty()) {
+                        String statement = currentStatement.toString().trim();
+                        if(!statement.isEmpty()) {
+                            statements.add(statement);
+                        }
+                        currentStatement.setLength(0);
+                    }
+                    else {
+                        currentStatement.append(c);
 
-                sentencia += "\n" + linea;
-
-                if(contador == 0 && linea.endsWith(";")) {
-                    logger.trace("Sentencia SQL: {}", sentencia);
-                    sentencias.add(sentencia);
-                    sentencia = "";
-                }
+                        // Verificar si se inicia un bloque.
+                        if(Character.isLetter(c) && idx + 1 < length && !Character.isLetter(sql.charAt(idx + 1))) {
+                            int startIdx = idx;
+                            while(startIdx > 0 && Character.isLetter(sql.charAt(startIdx - 1))) {
+                                startIdx--;
+                            }
+                            String keyword = sql.substring(startIdx, idx + 1).toUpperCase();
+                            BlockType blockType = BlockType.fromStartKeyword(keyword);
+                            if(blockType != null) {
+                                blockStack.push(blockType);
+                            }
+                            else if(!blockStack.isEmpty() && keyword.equalsIgnoreCase(blockStack.peek().getEndKeyword())) {
+                                blockStack.pop();
+                            }
+                        }
+                    }
+                    break;
+                case IN_STRING_LITERAL:
+                    currentStatement.append(c);
+                    if(c == '\'') {
+                        // La comilla está escapada y no marca el final de la cadena.
+                        if(idx + 1 < length && sql.charAt(idx + 1) == '\'') {
+                            currentStatement.append('\'');
+                            idx++;
+                        } else {
+                            state = SqlScriptState.NORMAL;
+                        }
+                    }
+                    break;
+                case IN_SINGLE_LINE_COMMENT:
+                    if(c == '\n') {
+                        state = SqlScriptState.NORMAL;
+                    }
+                    break;
+                case IN_MULTI_LINE_COMMENT:
+                    if(c == '*' && idx + 1 < length && sql.charAt(idx + 1) == '/') {
+                        state = SqlScriptState.NORMAL;
+                        idx++;
+                    }
+                    break;
             }
-            return sentencias;
+            idx++;
         }
+        if(blockStack.size() > 0) throw new SQLException("El script SQL contiene bloques sin cerrar.");
+        return statements;
     }
 
     /**
@@ -202,8 +286,10 @@ public class SqlUtils {
         boolean originalAutoCommit = conn.getAutoCommit();
         conn.setAutoCommit(false);
 
+        String sqlScript = new String(st.readAllBytes(), StandardCharsets.UTF_8);
+
         try (Statement stmt = conn.createStatement()) {
-            for(String sentencia: splitSQL(st)) {
+            for(String sentencia: splitSQL(sqlScript)) {
                 stmt.execute(sentencia);
                 logger.debug("Sentencia ejecutada: {}", sentencia);
             }
@@ -227,7 +313,7 @@ public class SqlUtils {
      * @return {@code true} si la base de datos tiene al menos una tabla de usuario, false en caso contrario.
      * @throws SQLException Si ocurre un error al acceder a los metadatos de la base de datos.
      */
-    public static boolean isDatabaseInitialized(Connection conn) throws SQLException {
+    public static boolean isDatabaseEmpty(Connection conn) throws SQLException {
     DatabaseMetaData metaData = conn.getMetaData();
 
         // 1. Intentamos obtener catálogo y esquema actuales

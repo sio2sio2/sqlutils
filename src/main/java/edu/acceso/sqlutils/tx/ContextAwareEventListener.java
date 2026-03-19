@@ -15,7 +15,7 @@ public abstract class ContextAwareEventListener implements EventListener {
 
     /**
      * Permite establecer el mecanismo que proporciona al listener su contexto de la transacción actual.
-     * Al registrar el listener con {@link TransactionManager#addListener(String, EventListener)},
+     * Al registrar el listener con {@link TransactionManager#addEventListener(String, EventListener)},
      * el gestor genera el proveedor de contexto e invoca este método para facilitárselo al listener.
      * @param contextSupplier El proveedor del contexto proporcionado por el gestor de transacciones.
      */

@@ -263,8 +263,9 @@ public class TransactionManager {
      * @param key La clave identificativa del listener.
      * @param listener El listener que se desea añadir.
      * @throws IllegalStateException Si ya existe un listener registrado con la clave dada.
+     * @return El propio gestor de transacciones para permitir encadenar llamadas al método.
      */
-    public void addListener(String key, EventListener listener) {
+    public TransactionManager addEventListener(String key, EventListener listener) {
         if(listenerKeys.putIfAbsent(key, listener) != null) throw new IllegalStateException("Ya hay un listener registrado con la clave '%s'".formatted(key));
         listeners.add(listener);
 
@@ -279,13 +280,14 @@ public class TransactionManager {
 
             contextAware.setContextSupplier(supplier);
         }
+        return this;
     }
 
     /**
      * Elimina un listener persistente registrado con la clave dada.
      * @param key La clave identificativa del listener a eliminar.
      */
-    public void removeListener(String key) {
+    public void removeEventListener(String key) {
         EventListener listener = listenerKeys.remove(key);
         if(listener != null) listeners.remove(listener);
     }
