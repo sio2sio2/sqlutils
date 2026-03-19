@@ -227,7 +227,7 @@ public class SqlUtils {
      * @return {@code true} si la base de datos tiene al menos una tabla de usuario, false en caso contrario.
      * @throws SQLException Si ocurre un error al acceder a los metadatos de la base de datos.
      */
-    public static boolean isDatabaseInitialized(Connection conn) throws SQLException {
+    public static boolean isDatabaseEmpty(Connection conn) throws SQLException {
     DatabaseMetaData metaData = conn.getMetaData();
 
         // 1. Intentamos obtener catálogo y esquema actuales

@@ -112,7 +112,7 @@ public class Conexion {
         try(InputStream st = guion.openStream()) {
             daoFactory.getTransactionManager().transaction(ctxt ->{
                 Connection conn = ctxt.connection();
-                if(!SqlUtils.isDatabaseInitialized(conn)) {
+                if(!SqlUtils.isDatabaseEmpty(conn)) {
                     SqlUtils.executeSQL(conn, st);
                     logger.info("Base de datos inicializada correctamente.");
                 }
