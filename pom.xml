@@ -6,7 +6,8 @@
     <artifactId>sqlutils</artifactId>
     <name>sqlutils</name>
     <description>Utilidades para el acceso a bases de datos SQL con JDBC</description>
-    <version>3.8.2</version>
+    <version>4.0.0</version>
+    <packaging>pom</packaging>
 
     <developers>
         <developer>
@@ -16,11 +17,18 @@
         </developer>
     </developers>
 
+   <modules>
+      <module>sqlutils-core</module>
+      <module>sqlutils-hikaricp</module>
+      <module>sqlutils-orm</module>
+   </modules>
+
     <properties>
         <!-- jitpack no reconoce release -->
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.plugin>3.15.0</maven.compiler.plugin>
     </properties>
 
     <profiles>
@@ -45,61 +53,75 @@
         </profile>
     </profiles>
  
+    <pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.plugin}</version>
+                <configuration>
+                    <source>${maven.compiler.source}</source>
+                    <target>${maven.compiler.target}</target>
+                </configuration>
+            </plugin>
+        </plugins>
+    </pluginManagement>
+
     <build>
         <plugins>
             <!-- Para generar la documentación en docs/apidocs -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
-                <!-- La última versión puede consultarse en el repositorio de Maven -->
-                <version>3.11.2</version>
+                <version>3.12.0</version>
                 <configuration>
-                    <source>21</source>   <!-- Versión de Java utilizada -->
+                    <source>${maven.compiler.release}</source>
                     <show>public</show> 
                 </configuration>
             </plugin>
         </plugins>
     </build>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>2.1.0-alpha1</version>
-        </dependency>
+    <dependencyManagement>
+       <dependencies>
+           <dependency>
+               <groupId>org.slf4j</groupId>
+               <artifactId>slf4j-api</artifactId>
+               <version>2.1.0-alpha1</version>
+           </dependency>
 
-        <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
-            <version>1.5.18</version>
-            <scope>test</scope>
-        </dependency>
+           <dependency>
+               <groupId>com.zaxxer</groupId>
+               <artifactId>HikariCP</artifactId>
+               <version>6.3.2</version>
+           </dependency>
 
-        <dependency>
-            <groupId>com.zaxxer</groupId>
-            <artifactId>HikariCP</artifactId>
-            <version>6.3.2</version>
-        </dependency>
+           <dependency>
+               <groupId>org.javassist</groupId>
+               <artifactId>javassist</artifactId>
+               <version>3.30.2-GA</version>
+           </dependency>
 
-        <dependency>
-            <groupId>org.javassist</groupId>
-            <artifactId>javassist</artifactId>
-            <version>3.30.2-GA</version>
-        </dependency>
+           <dependency>
+               <groupId>ch.qos.logback</groupId>
+               <artifactId>logback-classic</artifactId>
+               <version>1.5.18</version>
+               <scope>test</scope>
+           </dependency>
 
-        <dependency>
-            <groupId>info.picocli</groupId>
-            <artifactId>picocli</artifactId>
-            <version>4.7.7</version>
-            <scope>test</scope>
-        </dependency>
+           <dependency>
+               <groupId>info.picocli</groupId>
+               <artifactId>picocli</artifactId>
+               <version>4.7.7</version>
+               <scope>test</scope>
+           </dependency>
 
-        <dependency>
-            <groupId>org.xerial</groupId>
-            <artifactId>sqlite-jdbc</artifactId>
-            <version>3.51.1.0</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
+           <dependency>
+               <groupId>org.xerial</groupId>
+               <artifactId>sqlite-jdbc</artifactId>
+               <version>3.51.1.0</version>
+               <scope>test</scope>
+           </dependency>
+       </dependencies>
+    </dependencyManagement>
 </project>
