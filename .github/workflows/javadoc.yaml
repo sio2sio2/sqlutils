@@ -24,7 +24,7 @@ jobs:
         cache: 'maven'
 
     - name: Generar Javadoc
-      run: mvn javadoc:javadoc
+      run: mvn javadoc:aggregate
 
     - name: Mover la documentación a gh-pages
       uses: peaceiris/actions-gh-pages@v3

@@ -94,7 +94,7 @@ Implementa un gestor para el manejo de transacciones que libera al desarrollador
 ```java
 TransactionManager tm = TransactionManager.create("BD", ds);  // ds es un DataSource ya creado.
 
-// Ordenados operaciones dentro de la transacción mediante una expresión lambda
+// Ordenamos operaciones dentro de la transacción mediante una expresión lambda
 // ctxt es un contexto que proporciona datos relacionados con la transacción.
 tm.transaction(ctxt -> {
     Connection conn = ctxt.connection();  // Conexión protegida frente a cierres manuales.
@@ -102,6 +102,7 @@ tm.transaction(ctxt -> {
     // ... Operamos con la base de datos ...
 });
 ```
+Soporta transacciones anidadas, pero el efecto de iniciar una transacción dentro de otra es, simplemente aumentar un contador interno (consultable a través del contexto): las operaciones se confirman o rechazan sólo al culminar la transacción raíz. 
 
 El gestor, además, permite la definición y registro de *observadores* que pueden reaccionar ante los siguientes eventos:
 
@@ -111,7 +112,7 @@ El gestor, además, permite la definición y registro de *observadores* que pued
 - **onTransactionStart**: Cuando una transacción anidada comienza.
 - **onTransactionEnd**: Cuando una transacción anidada culmina.
 
-Soporta transacciones anidadas, pero el efecto de iniciar una transacción dentro de otra es, simplemente aumentar un contador interno (consultable a través del contexto): las operaciones se confirman o rechazan sólo al culminar la transacción raíz. La definición de un *observador* es sencilla:
+La definición de un *observador* es sencilla:
 
 ```java
 /**
@@ -155,22 +156,24 @@ public class CounterListener extends ContextAwareEventListener {
 }
 ```
 
-El *observador* no es excesivamente útil, pero sirve para ilustrar cómo crear uno que maneje un recurso propio (el contador). La librería viene
+Este *observador* no es excesivamente útil, pero sirve para ilustrar cómo crear uno que maneje un recurso propio (el contador). La librería viene
 con uno ya definido llamado `LoggingManager`, que sirve para diferir el registro
 de mensajes hasta que se conozca el resultado de la transacción:
 
 
 ```java
 TransactionManager tm = TransactionManager.create("BD", ds)
-    .addEventListener(CounterListener.KEY, new CounterListener())
-    .addEventListener(LoggingManager.KEY, new LoggingManager()); // Registramos el observador.
+    .addEventListener(CounterListener.KEY, new CounterListener()) // Registramos el observador.
+    .addEventListener(LoggingManager.KEY, new LoggingManager());  // Otro observador
 
 tm.transaction(ctxt -> {
     Connection conn = ctxt.connection();  // Conexión protegida frente a cierres manuales.
     LoggingManager logger = ctxt.getEventListener(LoggingManager.KEY, LoggingManager.class);
     CounterListener counter = ctxt.getEventListener(CounterListener.KEY, CounterListener.class);
 
-    // Realizamos una operación de inserción cualquiera... y después.
+    // ... Realizamos una operación de inserción cualquiera (p.ej. una inserción) ...
+
+    // Una vez hecha
     logger.sendMessage(
         getClass(),
         Level.DEBUG,                                    // Nivel de gravedad.

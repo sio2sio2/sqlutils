@@ -4,51 +4,41 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Map;
 import java.util.Objects;
+import java.util.ServiceLoader;
 
 import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
-
 import edu.acceso.sqlutils.tx.EventListener;
 import edu.acceso.sqlutils.tx.TransactionManager;
 
 /**
  * Pool de conexiones para manejar múltiples conexiones a una base de datos.
- * Utiliza {@link HikariDataSource} y un patrón Multiton para garantizar
- * que solo haya una instancia por URL de conexión, usuario y
- * contraseña.
+ * Utiliza un patrón Multiton para garantizar que solo haya una instancia
+ * por URL de conexión, usuario y contraseña.
  */
 public class ConnectionPool implements AutoCloseable {
     private static final Logger logger = LoggerFactory.getLogger(ConnectionPool.class);
 
+    /** Fábrica por defecto para crear DataSources: se busca en el classpath */
+    private static final DataSourceFactory DEFAULT_DS_FACTORY = ServiceLoader.load(DataSourceFactory.class)
+        .findFirst()
+        .orElse(null);
+
     /** Mapa con las instancias creadas **/
     private static final Map<String, ConnectionPool> instances = new ConcurrentHashMap<>();
-    /** Número máximo de conexiones en el pool */
-    public static volatile short maxConnections = 10;
-    /** Número mínimo de conexiones en el pool */
-    public static volatile short minConnections = 1;
 
     /** El gestor de transacciones asociado a esta instancia. */
     private TransactionManager tm;
 
     private final String key;
-    private final HikariDataSource ds;
+    private final DataSource ds;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
-    private ConnectionPool(String key, String dbUrl, String user, String password) {
-        HikariConfig hconfig = new HikariConfig();
-        hconfig.setJdbcUrl(dbUrl);
-        hconfig.setUsername(user);
-        hconfig.setPassword(password);
-        // Mínimo y máximo de conexiones.
-        hconfig.setMaximumPoolSize(maxConnections);
-        hconfig.setMinimumIdle(minConnections);
-
-        ds = new HikariDataSource(hconfig);
+    private ConnectionPool(String key, String dbUrl, String user, String password, DataSourceFactory dsFactory) {
+        ds = dsFactory.create(dbUrl, user, password);
         this.key = key;
     }
 
@@ -58,15 +48,21 @@ public class ConnectionPool implements AutoCloseable {
      * @param dbUrl URL de conexión a la base de datos.
      * @param user Usuario de conexión
      * @param password Contraseña de conexión
+     * @param dsFactory Objecto que sabe crear el DataSource.
      * @return La instancia solicitada.
      * @throws IllegalStateException Si la instancia ya existe.
+     * @throws IllegalArgumentException Si no hay DataSourceFactory disponible ni se ha proporcionado como argumento.
      */
-    public static ConnectionPool create(String key, String dbUrl, String user, String password) {
+    public static ConnectionPool create(String key, String dbUrl, String user, String password, DataSourceFactory dsFactory) {
         Objects.requireNonNull(key, "La clave no puede ser nula");
+        if(dsFactory == null) dsFactory = DEFAULT_DS_FACTORY;
+        if(dsFactory == null) {
+            throw new IllegalArgumentException("No se ha encontrado ningún DataSourceFactory en el classpath. Asegúrese de incluir una implementación, como sqlutils-hikaricp, en las dependencias del proyecto o defina la suya propia.");
+        }
 
         if(instances.containsKey(key)) throw new IllegalStateException("Ya hay una instancia asociada a la clave");
 
-	    ConnectionPool instance = new ConnectionPool(key, dbUrl, user, password);
+	    ConnectionPool instance = new ConnectionPool(key, dbUrl, user, password, dsFactory);
         logger.debug("Creado nuevo pool de conexiones para la clave {}", key);
         ConnectionPool previa = instances.putIfAbsent(key, instance);
 
@@ -85,8 +81,8 @@ public class ConnectionPool implements AutoCloseable {
      * @param dbUrl La URL de conexión.
      * @return La instancia solicitada.
      */
-    public static ConnectionPool create(String key, String dbUrl) {
-        return ConnectionPool.create(key, dbUrl, null, null);
+    public static ConnectionPool create(String key, String dbUrl, String user, String password) {
+        return ConnectionPool.create(key, dbUrl, user, password, null);
     }
 
     /**
@@ -114,7 +110,7 @@ public class ConnectionPool implements AutoCloseable {
      * @return {@code true} si el pool está abierto, {@code false} en caso contrario
      */
     public boolean isOpen() {
-        return !closed.get() && !ds.isClosed();
+        return !closed.get();
     }
 
     /** Obtiene el DataSource asociado al pool de conexiones
@@ -174,7 +170,13 @@ public class ConnectionPool implements AutoCloseable {
                 tm = null;
             }
             instances.remove(key, this);
-            ds.close();
+            if(ds instanceof AutoCloseable ac) {
+                try {
+                    ac.close();
+                } catch (Exception e) {
+                    logger.error("Error al cerrar el DataSource del pool de conexiones para la clave {}: {}", key, e.getMessage(), e);
+                }
+            }
             logger.debug("Pool de conexiones cerrado para la clave {}", key);
         }
     }

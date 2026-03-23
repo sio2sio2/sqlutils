@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import edu.acceso.sqlutils.ConnectionPool;
+import edu.acceso.sqlutils.DataSourceFactory;
 import edu.acceso.sqlutils.DbmsSelector;
 import edu.acceso.sqlutils.orm.mapper.EntityMapper;
 import edu.acceso.sqlutils.orm.minimal.Entity;
@@ -151,6 +152,11 @@ public class DaoFactory implements AutoCloseable {
          */
         private FetchPlan fetchPlan = FetchPlan.EAGER;
         /**
+         * Fábrica que permite crear el pool de conexiones. Si no se proporciona, se deja {@code null}
+         * y se espera que {@link ConnectionPool} use una implementación por defecto.
+         */
+        private DataSourceFactory dsFactory = null;
+        /**
          * Mapa de mappers de entidades.
          */
         private final Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers = new ConcurrentHashMap<>();
@@ -222,12 +228,13 @@ public class DaoFactory implements AutoCloseable {
         }
 
         /**
-         * Genera una nueva instancia de {@link DaoFactory}.
-         * @param dbUrl URL de la base de datos.
-         * @return Una nueva instancia de {@link DaoFactory}.
+         * Define la fábrica que se utilizará para crear el pool de conexiones asociado a esta factoría de DAOs.
+         * @param dsFactory La fábrica que se desea utilizar.
+         * @return El propio objeto para seguir encadenado la configuración.
          */
-        public DaoFactory get(String dbUrl) {
-            return get(dbUrl, null, null);
+        public Builder with(DataSourceFactory dsFactory) {
+            this.dsFactory = dsFactory;
+            return this;
         }
 
         /**
@@ -253,7 +260,7 @@ public class DaoFactory implements AutoCloseable {
             return instances.computeIfAbsent(key, k -> {
                 ConnectionPool cp;
                 try {
-                    cp = ConnectionPool.create(key, dbUrl, user, password);
+                    cp = ConnectionPool.create(key, dbUrl, user, password, dsFactory);
                 } catch(IllegalStateException e) {  // Creado fuera de la fábrica: lo recuperamos
                     cp = ConnectionPool.get(key);
                 }
