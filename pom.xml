@@ -6,7 +6,7 @@
     <artifactId>sqlutils</artifactId>
     <name>sqlutils</name>
     <description>Utilidades para el acceso a bases de datos SQL con JDBC</description>
-    <version>4.0.0</version>
+    <version>${revision}</version>
     <packaging>pom</packaging>
 
     <developers>
@@ -26,6 +26,7 @@
 
     <properties>
         <!-- jitpack no reconoce release -->
+        <revision>4.0.1</revision>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <maven.compiler.release>21</maven.compiler.release>
@@ -96,6 +97,26 @@
                 </configuration>
             </plugin>
         </plugins>
+
+        <!-- Para poder usar revision y tener coordinadas las versiones de los módulos-->
+        <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>flatten-maven-plugin</artifactId>
+            <version>1.7.3</version>
+            <configuration>
+                <updatePomFile>true</updatePomFile>
+                <flattenMode>resolveCiFriendliesOnly</flattenMode>
+            </configuration>
+            <executions>
+                <execution>
+                    <id>flatten</id>
+                    <phase>process-resources</phase>
+                    <goals>
+                        <goal>flatten</goal>
+                    </goals>
+                </execution>
+            </executions>
+        </plugin>
     </build>
 
     <dependencyManagement>
