@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils.tx;
+package edu.acceso.sqlutils.tx.event;
 
 /**
  * Interfaz que representa el subcontexto de transacción

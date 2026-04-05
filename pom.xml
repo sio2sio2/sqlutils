@@ -20,13 +20,15 @@
    <modules>
       <module>sqlutils-core</module>
       <module>sqlutils-hikaricp</module>
+      <module>sqlutils-jdbc</module>
+      <module>sqlutils-jpa</module>
       <module>sqlutils-orm</module>
       <module>sqlutils-demo</module>
    </modules>
 
     <properties>
         <!-- jitpack no reconoce release -->
-        <revision>4.0.1</revision>
+        <revision>4.1.0</revision>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <maven.compiler.release>21</maven.compiler.release>
@@ -94,29 +96,37 @@
                 <configuration>
                     <source>${maven.compiler.release}</source>
                     <show>public</show> 
+                    <detectOfflineLinks>false</detectOfflineLinks>
+                    <additionalDependencies>
+                        <additionalDependency>
+                            <groupId>jakarta.persistence</groupId>
+                            <artifactId>jakarta.persistence-api</artifactId>
+                            <version>3.2.0</version>
+                        </additionalDependency>
+                    </additionalDependencies>
                 </configuration>
             </plugin>
-        </plugins>
 
-        <!-- Para poder usar revision y tener coordinadas las versiones de los módulos-->
-        <plugin>
-            <groupId>org.codehaus.mojo</groupId>
-            <artifactId>flatten-maven-plugin</artifactId>
-            <version>1.7.3</version>
-            <configuration>
-                <updatePomFile>true</updatePomFile>
-                <flattenMode>resolveCiFriendliesOnly</flattenMode>
-            </configuration>
-            <executions>
-                <execution>
-                    <id>flatten</id>
-                    <phase>process-resources</phase>
-                    <goals>
-                        <goal>flatten</goal>
-                    </goals>
-                </execution>
-            </executions>
-        </plugin>
+            <!-- Para poder usar revision y tener coordinadas las versiones de los módulos-->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <version>1.7.3</version>
+                <configuration>
+                    <updatePomFile>true</updatePomFile>
+                    <flattenMode>resolveCiFriendliesOnly</flattenMode>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>flatten</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>flatten</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 
     <dependencyManagement>

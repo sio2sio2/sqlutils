@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils;
+package edu.acceso.sqlutils.jdbc.internal;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;

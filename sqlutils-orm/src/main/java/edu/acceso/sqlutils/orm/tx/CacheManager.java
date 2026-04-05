@@ -4,7 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import edu.acceso.sqlutils.orm.minimal.Entity;
-import edu.acceso.sqlutils.tx.ContextAwareEventListener;
+import edu.acceso.sqlutils.tx.event.ContextAwareEventListener;
 
 /**
  * Listener de eventos que `permite agregar una caché de objetos a la transacción,

@@ -9,9 +9,9 @@
        <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>sqlutils-orm</artifactId>
-    <name>sqlutils-orm</name>
-    <description>PseudoORM construido sobre sqlutils</description>
+    <artifactId>sqlutils-jdbc</artifactId>
+    <name>sqlutils-jdbc</name>
+    <description>Utilidades de sqlutils para JDBC</description>
     <packaging>jar</packaging>
 
     <dependencies>
@@ -22,13 +22,8 @@
 
         <dependency>
             <groupId>edu.acceso.sqlutils</groupId>
-            <artifactId>sqlutils-jdbc</artifactId>
+            <artifactId>sqlutils-core</artifactId>
             <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.javassist</groupId>
-            <artifactId>javassist</artifactId>
         </dependency>
     </dependencies>
 

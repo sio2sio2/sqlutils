@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils.tx;
+package edu.acceso.sqlutils.tx.event;
 
 /**
  * Interface para escuchar eventos relacionados con transacciones.

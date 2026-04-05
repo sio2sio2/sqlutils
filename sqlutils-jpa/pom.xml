@@ -9,9 +9,9 @@
        <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>sqlutils-orm</artifactId>
-    <name>sqlutils-orm</name>
-    <description>PseudoORM construido sobre sqlutils</description>
+    <artifactId>sqlutils-jpa</artifactId>
+    <name>sqlutils-jpa</name>
+    <description>Utilidades de sqlutils para JPA</description>
     <packaging>jar</packaging>
 
     <dependencies>
@@ -22,14 +22,17 @@
 
         <dependency>
             <groupId>edu.acceso.sqlutils</groupId>
-            <artifactId>sqlutils-jdbc</artifactId>
+            <artifactId>sqlutils-core</artifactId>
             <version>${project.version}</version>
         </dependency>
 
+        <!-- Especificación JPA -->
         <dependency>
-            <groupId>org.javassist</groupId>
-            <artifactId>javassist</artifactId>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <version>3.2.0</version>
         </dependency>
+
     </dependencies>
 
 </project>

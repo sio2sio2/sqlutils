@@ -2,6 +2,7 @@
     "miapp.package": "edu.acceso.sqlutils",
     "java.configuration.updateBuildConfiguration": "interactive",
          "files.exclude": {
-          "**/target/": true
+          "**/target/": true,
+          "**/.flattened-pom.xml": true
      },
 }

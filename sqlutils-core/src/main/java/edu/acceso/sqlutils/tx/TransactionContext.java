@@ -2,13 +2,16 @@ package edu.acceso.sqlutils.tx;
 
 import java.sql.Connection;
 
+import edu.acceso.sqlutils.tx.event.EventListener;
+
 /**
  * Interfaz que representa el contexto de una transacción.
  * Este objeto será el que se haga accesible al crear una transacción
- * mediante los métodos {@link TransactionManager#transaction(TransactionableR<T>)}
- * y {@link TransactionManager#transaction(Transactionable)}.
+ * mediante los métodos {@link edu.acceso.sqlutils.internal.tx.BaseTransactionManager#transaction(TransactionableR<T>)}
+ * y {@link edu.acceso.sqlutils.internal.tx.BaseTransactionManager#transaction(Transactionable)}.
+ * @param <R> El tipo del recurso que maneja la transacción (p. ej. {@link Connection} si usamos bases de datos con JDBC).
  */
-public interface TransactionContext {
+public interface TransactionContext<R> {
 
     /**
      * Devuelve el nivel de anidamiento de la transacción actual.
@@ -23,10 +26,10 @@ public interface TransactionContext {
     public String key();
 
     /**
-     * Devuelve la conexión protegida asociada a este contexto.
-     * @return La conexión solicitada.
+     * Devuelve el recurso asociado a este contexto.
+     * @return El recurso solicitado.
      */
-    public Connection connection();
+    public R handle();
 
     /**
      * Devuelve el listener de eventos asociado a la clave dada.

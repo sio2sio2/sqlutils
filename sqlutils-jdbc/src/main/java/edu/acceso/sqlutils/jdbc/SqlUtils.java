@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils;
+package edu.acceso.sqlutils.jdbc;
 
 import java.sql.Statement;
 import java.io.IOException;
@@ -23,7 +23,7 @@ import java.util.stream.StreamSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import edu.acceso.sqlutils.errors.DataAccessRuntimeException;
+import edu.acceso.sqlutils.errors.DataAccessException;
 
 /**
  * Clase que implementa algunos métodos estáticos adicionales a JDBC.
@@ -52,15 +52,15 @@ public class SqlUtils {
             if(avanzar) {
                 try {
                     if(stmt.isClosed()) {
-                        throw new DataAccessRuntimeException(new IllegalStateException("Statement is closed!!!"));
+                        throw new DataAccessException(new IllegalStateException("Statement is closed!!!"));
                     }
                     if(rs.isClosed()) {
-                        throw new DataAccessRuntimeException("ResultSet is closed!!!");
+                        throw new DataAccessException("ResultSet is closed!!!");
                     }
                     hasNextElement = rs.next();
                 }
                 catch(SQLException err) {
-                    throw new DataAccessRuntimeException(err);
+                    throw new DataAccessException(err);
                 }
                 finally {
                     avanzar = false;
@@ -105,7 +105,7 @@ public class SqlUtils {
                 return checked.apply(t);
             }
             catch(SQLException err) {
-                throw new DataAccessRuntimeException(err);
+                throw new DataAccessException(err);
             }
         };
     }
@@ -116,7 +116,7 @@ public class SqlUtils {
      * @param stmt La sentencia que generó el {@param ResultSet}.
      * @param rs Los resultados de una consulta.
      * @return Un flujo en el que cada elemento es el siguiente estado del ResultSet proporcionado.
-     * @throws DataAccessRuntimeException Cuando se produce un error al acceder a los datos.
+     * @throws DataAccessException Cuando se produce un error al acceder a los datos.
      */
     public static Stream<ResultSet> resultSetToStream(Connection conn, Statement stmt, ResultSet rs) {
         return StreamSupport.stream(Spliterators.spliteratorUnknownSize(new ResultSetIterator(stmt, rs), Spliterator.ORDERED), false)
@@ -127,7 +127,7 @@ public class SqlUtils {
                     if(conn != null) conn.close();
                 }
                 catch(Exception err) {
-                    throw new DataAccessRuntimeException(err);
+                    throw new DataAccessException(err);
                 }
             });
     }
@@ -140,7 +140,7 @@ public class SqlUtils {
      * @param rs  El objeto que representa los resultado de la consulta.
      * @param mapper La función que permite transformar la fila en un objeto (puede generar un SQLException).
      * @return El flujo de objetos.
-     * @throws DataAccessRuntimeException Cuando se produce un error al acceder a los datos.
+     * @throws DataAccessException Cuando se produce un error al acceder a los datos.
      */
     public static <T> Stream<T> resultSetToStream(Connection conn, Statement stmt, ResultSet rs, CheckedFunction<ResultSet, T> mapper) {
         return resultSetToStream(conn, stmt, rs).map(checkedToUnchecked(mapper));

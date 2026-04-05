@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils.tx;
+package edu.acceso.sqlutils.tx.event;
 
 import java.util.ArrayList;
 import java.util.List;

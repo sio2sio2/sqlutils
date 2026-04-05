@@ -7,9 +7,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import edu.acceso.sqlutils.ConnectionPool;
-import edu.acceso.sqlutils.DataSourceFactory;
 import edu.acceso.sqlutils.DbmsSelector;
+import edu.acceso.sqlutils.jdbc.JdbcConnection;
+import edu.acceso.sqlutils.jdbc.DataSourceFactory;
+import edu.acceso.sqlutils.jdbc.tx.TransactionManager;
 import edu.acceso.sqlutils.orm.mapper.EntityMapper;
 import edu.acceso.sqlutils.orm.minimal.Entity;
 import edu.acceso.sqlutils.orm.relations.FetchPlan;
@@ -18,8 +19,7 @@ import edu.acceso.sqlutils.orm.simple.crud.SimpleCrudInterface;
 import edu.acceso.sqlutils.orm.simple.query.SimpleSqlQuery;
 import edu.acceso.sqlutils.orm.simple.query.SimpleSqlQueryGeneric;
 import edu.acceso.sqlutils.orm.tx.CacheManager;
-import edu.acceso.sqlutils.tx.LoggingManager;
-import edu.acceso.sqlutils.tx.TransactionManager;
+import edu.acceso.sqlutils.tx.event.LoggingManager;
 
 /** 
  * Fábrica de DAOs que permite crear objetos DAO para realizar operaciones CRUD
@@ -43,7 +43,7 @@ public class DaoFactory implements AutoCloseable {
     private final SqlQueryFactory sqlQueryFactory;
     /** Clase que implementa las operaciones CRUD */
     private final Class<? extends AbstractCrud<?>> crudClass;
-    private final ConnectionPool cp;
+    private final JdbcConnection cp;
     /** Plan predefinido para la carga de relaciones */
     private final FetchPlan fetchPlan;
 
@@ -65,7 +65,7 @@ public class DaoFactory implements AutoCloseable {
      */
     public static record DaoData(
         String key,
-        ConnectionPool cp,
+        JdbcConnection cp,
         TransactionManager tm,
         SqlQueryFactory sqlQueryFactory,
         Class<? extends AbstractCrud<?>> crudClass,
@@ -111,7 +111,7 @@ public class DaoFactory implements AutoCloseable {
      * @param fetchPlan Plan predefinido para la carga de relaciones.
      * @param mappers Mapa de mappers de entidades.
      */
-    private DaoFactory(ConnectionPool cp, SqlQueryFactory sqlQueryFactory, Class<? extends AbstractCrud<?>> crudClass, FetchPlan fetchPlan, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
+    private DaoFactory(JdbcConnection cp, SqlQueryFactory sqlQueryFactory, Class<? extends AbstractCrud<?>> crudClass, FetchPlan fetchPlan, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
         this.cp = cp;
         /** Gestor de transacciones con soporte para logging y cacheo */
         cp.initTransactionManager(Map.of(
@@ -153,7 +153,7 @@ public class DaoFactory implements AutoCloseable {
         private FetchPlan fetchPlan = FetchPlan.EAGER;
         /**
          * Fábrica que permite crear el pool de conexiones. Si no se proporciona, se deja {@code null}
-         * y se espera que {@link ConnectionPool} use una implementación por defecto.
+         * y se espera que {@link JdbcConnection} use una implementación por defecto.
          */
         private DataSourceFactory dsFactory = null;
         /**
@@ -258,11 +258,11 @@ public class DaoFactory implements AutoCloseable {
         public DaoFactory get(String dbUrl, String user, String password) {
 
             return instances.computeIfAbsent(key, k -> {
-                ConnectionPool cp;
+                JdbcConnection cp;
                 try {
-                    cp = ConnectionPool.create(key, dbUrl, user, password, dsFactory);
+                    cp = JdbcConnection.create(key, dbUrl, user, password, dsFactory);
                 } catch(IllegalStateException e) {  // Creado fuera de la fábrica: lo recuperamos
-                    cp = ConnectionPool.get(key);
+                    cp = JdbcConnection.get(key);
                 }
 
                 SqlQueryFactory sqlQueryFactory = getSqlQueryFactoryBuilder().get(DbmsSelector.fromUrl(dbUrl));

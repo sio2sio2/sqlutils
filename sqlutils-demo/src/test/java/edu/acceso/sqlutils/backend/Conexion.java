@@ -10,10 +10,10 @@ import org.slf4j.LoggerFactory;
 import edu.acceso.sqlutils.ArchivoWrapper;
 import edu.acceso.sqlutils.Config;
 import edu.acceso.sqlutils.DbmsSelector;
-import edu.acceso.sqlutils.SqlUtils;
 import edu.acceso.sqlutils.backend.mappers.CentroMapper;
 import edu.acceso.sqlutils.backend.mappers.EstudianteMapper;
 import edu.acceso.sqlutils.errors.DataAccessException;
+import edu.acceso.sqlutils.jdbc.SqlUtils;
 import edu.acceso.sqlutils.modelo.Centro;
 import edu.acceso.sqlutils.modelo.Estudiante;
 import edu.acceso.sqlutils.orm.DaoFactory;
@@ -111,7 +111,7 @@ public class Conexion {
     private Conexion inicializar(ArchivoWrapper guion) throws IOException, DataAccessException {
         try(InputStream st = guion.openStream()) {
             daoFactory.getTransactionManager().transaction(ctxt ->{
-                Connection conn = ctxt.connection();
+                Connection conn = ctxt.handle();
                 if(!SqlUtils.isDatabaseEmpty(conn)) {
                     SqlUtils.executeSQL(conn, st);
                     logger.info("Base de datos inicializada correctamente.");

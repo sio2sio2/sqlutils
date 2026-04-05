@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils.tx;
+package edu.acceso.sqlutils.tx.event;
 
 import java.util.function.Supplier;
 
@@ -15,11 +15,11 @@ public abstract class ContextAwareEventListener implements EventListener {
 
     /**
      * Permite establecer el mecanismo que proporciona al listener su contexto de la transacción actual.
-     * Al registrar el listener con {@link TransactionManager#addEventListener(String, EventListener)},
+     * Al registrar el listener con {@link edu.acceso.sqlutils.internal.tx.BaseTransactionManager#addEventListener(String, EventListener)},
      * el gestor genera el proveedor de contexto e invoca este método para facilitárselo al listener.
      * @param contextSupplier El proveedor del contexto proporcionado por el gestor de transacciones.
      */
-    protected void setContextSupplier(Supplier<EventListenerContext> contextSupplier) {
+    public void setContextSupplier(Supplier<EventListenerContext> contextSupplier) {
         this.contextSupplier = contextSupplier;
     }
 

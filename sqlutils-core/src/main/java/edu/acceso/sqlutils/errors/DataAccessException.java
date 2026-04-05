@@ -3,7 +3,7 @@ package edu.acceso.sqlutils.errors;
 /**
  * Excepción para errores de acceso a datos.
  */
-public class DataAccessException extends Exception {
+public class DataAccessException extends RuntimeException {
     /**
      *  Constructor de la excepción con un mensaje y una causa.
      * @param message Mensaje descriptivo del error.

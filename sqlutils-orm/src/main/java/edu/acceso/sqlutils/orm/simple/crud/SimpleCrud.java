@@ -11,8 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 
-import edu.acceso.sqlutils.SqlUtils;
 import edu.acceso.sqlutils.errors.DataAccessException;
+import edu.acceso.sqlutils.jdbc.SqlUtils;
 import edu.acceso.sqlutils.orm.AbstractCrud;
 import edu.acceso.sqlutils.orm.DaoFactory.DaoData;
 import edu.acceso.sqlutils.orm.mapper.SqlTypesTranslator;
@@ -92,7 +92,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         if (entity != null) return Optional.of(entity);
 
         try(
-            Connection conn = data.tm().getConnection();
+            Connection conn = data.tm().getHandle();
             PreparedStatement pstmt = conn.prepareStatement(sql);
         ) {
             pstmt.setLong(1, id);
@@ -112,7 +112,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
 
         try {
             // RECURSOS: no se cierran, porque se espera que lo haga el consumidor del stream.
-            Connection conn = data.tm().getConnection();
+            Connection conn = data.tm().getHandle();
             PreparedStatement pstmt = conn.prepareStatement(sql);
             ResultSet rs = pstmt.executeQuery();
 
@@ -136,7 +136,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         value = translator.getSqlValue();
 
         try {
-            Connection conn = data.tm().getConnection();
+            Connection conn = data.tm().getHandle();
             PreparedStatement pstmt = conn.prepareStatement(sql);
 
             pstmt.setObject(1, value, translator.getType());
@@ -156,7 +156,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         final String sql = getSqlQuery().getDeleteSql();
 
         try(
-            Connection conn = data.tm().getConnection();
+            Connection conn = data.tm().getHandle();
             PreparedStatement pstmt = conn.prepareStatement(sql);
         ) {
             pstmt.setLong(1, id);
@@ -182,7 +182,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         final String sql = getSqlQuery().getInsertSql();
 
         try(
-            Connection conn = data.tm().getConnection();
+            Connection conn = data.tm().getHandle();
             PreparedStatement pstmt = conn.prepareStatement(sql);
         ) {
             mapper.EntityToParams(pstmt, entity);
@@ -206,7 +206,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         final String sql = getSqlQuery().getUpdateSql();
 
         try(
-            Connection conn = data.tm().getConnection();
+            Connection conn = data.tm().getHandle();
             PreparedStatement pstmt = conn.prepareStatement(sql);
         ) {
             mapper.EntityToParams(pstmt, entity);
@@ -232,7 +232,7 @@ public class SimpleCrud<T extends Entity> extends AbstractCrud<T> implements Sim
         final String sql = getSqlQuery().getUpdateIdSql();
 
         try(
-            Connection conn = data.tm().getConnection();
+            Connection conn = data.tm().getHandle();
             PreparedStatement pstmt = conn.prepareStatement(sql);
         ) {
             pstmt.setLong(1, newId);

@@ -5,7 +5,7 @@ import javax.sql.DataSource;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
-import edu.acceso.sqlutils.DataSourceFactory;
+import edu.acceso.sqlutils.jdbc.DataSourceFactory;
 
 public class HikariCPFactory implements DataSourceFactory {
 
