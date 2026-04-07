@@ -1,6 +1,16 @@
 edu.acceso.sqlutils
 edu.acceso.sqlutils.errors
 edu.acceso.sqlutils.hikari
+edu.acceso.sqlutils.internal
+edu.acceso.sqlutils.internal.tx
+edu.acceso.sqlutils.internal.tx.event
+edu.acceso.sqlutils.jdbc
+edu.acceso.sqlutils.jdbc.internal
+edu.acceso.sqlutils.jdbc.internal.tx
+edu.acceso.sqlutils.jdbc.tx
+edu.acceso.sqlutils.jpa
+edu.acceso.sqlutils.jpa.internal.tx
+edu.acceso.sqlutils.jpa.tx
 edu.acceso.sqlutils.orm
 edu.acceso.sqlutils.orm.mapper
 edu.acceso.sqlutils.orm.minimal
@@ -12,3 +22,4 @@ edu.acceso.sqlutils.orm.simple.crud
 edu.acceso.sqlutils.orm.simple.query
 edu.acceso.sqlutils.orm.tx
 edu.acceso.sqlutils.tx
+edu.acceso.sqlutils.tx.event
