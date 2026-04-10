@@ -59,7 +59,6 @@ public class JdbcHandle implements TransactionHandle<Connection> {
         try {
             handle.commit();
         } catch (SQLException e) {
-            // TODO: Hacer rollback explícito.
             commitException = e;
             throw new DataAccessException("Error al hacer commit de la transacción", e);
         } finally {

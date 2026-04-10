@@ -64,8 +64,8 @@ public abstract class BaseConnection<TM extends BaseTransactionManager<?>> imple
      * Crea un gestor de transacciones asociado a este conector
      * @return El gestor de transacciones creado.
      */
-    public TM initTransactionManager() {
-        return initTransactionManager(null);
+    public BaseConnection<TM> withTransactionManager() {
+        return withTransactionManager(null);
     }
 
     /**
@@ -76,13 +76,13 @@ public abstract class BaseConnection<TM extends BaseTransactionManager<?>> imple
      * Si el mapa es {@code null}, no se añadirá ningún listener al gestor de transacciones.
      * @return El gestor de transacciones creado.
      */
-    public synchronized TM initTransactionManager(Map<String, EventListener> listeners) {
+    public synchronized BaseConnection<TM> withTransactionManager(Map<String, EventListener> listeners) {
         if(!isOpen()) throw new IllegalStateException("El objeto está cerrado");
         if(tm != null) throw new IllegalStateException("Ya hay un gestor de transacciones asociado a la clave '%s'. No se puede crear otro.".formatted(key)); 
         tm = createTransactionManager();
         if(listeners != null) listeners.forEach(tm::addEventListener);
         logger.debug("Creado un gestor de transacciones asociado a la clave '{}' de este", key);
-        return tm;
+        return this;
     }
 
     /**

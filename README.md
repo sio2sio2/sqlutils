@@ -23,7 +23,7 @@ es necesario incluirlo explícitamente en las dependencias.
 `DataAccessException`  
 Define una excepción no protegida para todas las excepciones generadas por la librería.
 
-`DbmsSelector`
+`DbmsSelector`  
 Es un enum que contiene la forma de las URLs y los drivers JDBC de los principales sistemas gestores de bases de datos: SQLite, MariaDB, MySQL, PostgreSQL, Oracle, MSSQL y H2. Simplifica la construcción de las URLs, la obtención del driver y la consulta sobre su soporte:
 
 ```java
@@ -284,10 +284,12 @@ conveniente hacerla funcionar en conjunción con el gestor de transacciones:
 ```java
 try (JdbcConnection jc = JdbcConnection.create("DB", dbUrl, dbUser, dbPassword)) {
     // Creamos el gestor asociado con los listener que queramos
-    TransactionManager tm = jc.initTransactionManager(
+    jc.withTransactionManager(Map.of(
         LoggingManager.KEY, new LoggingManager(),
         CounterListener.KEY, new CounterListener(),
-    );
+    ));
+
+    TransactionManager tm = jc.getTransactionManager();
 
     // Ahora podemos operar usando este gestor
     tm.transaction(ctxt -> {
@@ -296,9 +298,6 @@ try (JdbcConnection jc = JdbcConnection.create("DB", dbUrl, dbUser, dbPassword))
         // ... Operaciones ...
 
     });
-
-    // El gestor se puede obtener en cualquier momento
-    tm = cp.getTransactionManager();
 }
 ```
 
@@ -345,19 +344,21 @@ Para programar con JPA, necesita el módulo `sqlutils-jpa`:
     </dependency>
 ```
 
-Este módulo  dos clases análogas al anterior (`TransactionManager` y
-`JpaConnection`). En este caso, tiene más sentido usar directamente
-`JpaConnection` (aunque pueda usarse como en el caso anterior
-`TransactionManager` de forma independiente):
+Este módulo tiene dos clases análogas al anterior (`TransactionManager` y
+`JpaConnection`), aunque, en este caso, tiene más sentido usar directamente
+`JpaConnection` (por más que pueda usarse también `TransactionManager`
+de forma independiente):
 
 ```java
 // Suponiendo que en persistence.xml hemos definido una unidad de persistencia
 // y tenemos un mapa con props que define en tiempo de ejecución propiedades
 try (JpaConnection jc = JpaConnection.create("UnidadPersistencia", props)) {
-    TransactionManager tm = jc.initTransactionManager(Map.of(
+    jc.initTransactionManager(Map.of(
         LoggingManager.KEY, new LoggingManager(),
         CounterListener.KEY, new CounterListener(),
     ));
+
+    TransactionManager tm = jc.getTransactioNManager();
 
     tm.transaction(ctxt -> {
         EntityManager em = ctxt.handle();

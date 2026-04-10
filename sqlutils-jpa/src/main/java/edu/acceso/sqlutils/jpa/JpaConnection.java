@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import edu.acceso.sqlutils.internal.BaseConnection;
 import edu.acceso.sqlutils.jpa.tx.TransactionManager;
+import edu.acceso.sqlutils.tx.event.EventListener;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.Persistence;
 
@@ -129,7 +130,17 @@ public class JpaConnection extends BaseConnection<TransactionManager> {
      */
     @Override
     protected TransactionManager createTransactionManager() {
-        return TransactionManager.create(key, emf);
+        return TransactionManager.createInternal(emf);
+    }
+
+    @Override
+    public JpaConnection withTransactionManager() {
+        return (JpaConnection) super.withTransactionManager();
+    }
+
+    @Override
+    public JpaConnection withTransactionManager(Map<String, EventListener> listeners) {
+        return (JpaConnection) super.withTransactionManager(listeners);
     }
 
     /**

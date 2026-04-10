@@ -2,6 +2,7 @@ package edu.acceso.sqlutils.jpa.internal.tx;
 
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.internal.tx.TransactionHandle;
+import edu.acceso.sqlutils.jpa.internal.EntityManagerWrapper;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityTransaction;
 import jakarta.persistence.PersistenceException;
@@ -54,7 +55,6 @@ public class JpaHandle implements TransactionHandle<EntityManager> {
         try {
             tx.commit();
         } catch (RollbackException e) {
-            // TODO: Hacer rollback explícito.
             throw new DataAccessException("Error al hacer commit. Se realiza rollback.", e);
         } catch(IllegalStateException e) {
             throw new DataAccessException("Error al hacer commit. La transacción no está activa.", e);
@@ -101,12 +101,13 @@ public class JpaHandle implements TransactionHandle<EntityManager> {
     }
 
     /**
-     * Devuelve el EntityManager subyacente que se está utilizando para las operaciones de la transacción.
-     * @return El EntityManager subyacente.
+     * Devuelve el EntityManager subyacente que se está utilizando para las operaciones de la transacción. Este
+     * EntityManager está protegido para evitar que el usuario pueda cerrarlo manualmente o intentar crear
+     * una transacción manualmente sobre él.
+     * @return El EntityManager solicitado
      */
     @Override
     public EntityManager getHandle() {
-        // TODO: Devolver un proxy que impida el cierre directo del EntityManager por parte del programador, para evitar errores de manejo de transacciones
-        return handle;
+        return EntityManagerWrapper.createProxy(handle);
     }
 }

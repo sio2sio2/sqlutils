@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import edu.acceso.sqlutils.internal.BaseConnection;
 import edu.acceso.sqlutils.jdbc.tx.TransactionManager;
+import edu.acceso.sqlutils.tx.event.EventListener;
 
 /**
  * Pool de conexiones para manejar múltiples conexiones a una base de datos.
@@ -127,7 +128,17 @@ public class JdbcConnection extends BaseConnection<TransactionManager> {
 
     @Override
     protected TransactionManager createTransactionManager() {
-        return TransactionManager.create(key, ds);
+        return TransactionManager.createInternal(ds);
+    }
+
+    @Override
+    public JdbcConnection withTransactionManager() {
+        return (JdbcConnection) super.withTransactionManager();
+    }
+
+    @Override
+    public JdbcConnection withTransactionManager(Map<String, EventListener> listeners) {
+        return (JdbcConnection) super.withTransactionManager(listeners);
     }
 
     /**

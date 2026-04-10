@@ -43,7 +43,7 @@ public class DaoFactory implements AutoCloseable {
     private final SqlQueryFactory sqlQueryFactory;
     /** Clase que implementa las operaciones CRUD */
     private final Class<? extends AbstractCrud<?>> crudClass;
-    private final JdbcConnection cp;
+    private final JdbcConnection jc;
     /** Plan predefinido para la carga de relaciones */
     private final FetchPlan fetchPlan;
 
@@ -56,7 +56,7 @@ public class DaoFactory implements AutoCloseable {
     /**
      * Registro de todos los datos necesarios para crear objetos DAO
      * @param key Clave que identifica la conexión.
-     * @param cp Pool de conexiones que utiliza la fábrica de DAOs.
+     * @param jc Pool de conexiones que utiliza la fábrica de DAOs.
      * @param tm Gestor de transacciones que utiliza la fábrica de DAOs.
      * @param sqlQueryFactory Fábrica de consultas SQL que utiliza la fábrica de DAOs.
      * @param crudClass Clase que implementa las operaciones CRUD.
@@ -65,7 +65,7 @@ public class DaoFactory implements AutoCloseable {
      */
     public static record DaoData(
         String key,
-        JdbcConnection cp,
+        JdbcConnection jc,
         TransactionManager tm,
         SqlQueryFactory sqlQueryFactory,
         Class<? extends AbstractCrud<?>> crudClass,
@@ -79,7 +79,7 @@ public class DaoFactory implements AutoCloseable {
          * @return Un nuevo registro con el fetchPlan especificado y el resto de datos iguales.
          */
         public DaoData with(FetchPlan fetchPlan) {
-            return new DaoData(key, cp, tm, sqlQueryFactory, crudClass, fetchPlan, mappers);
+            return new DaoData(key, jc, tm, sqlQueryFactory, crudClass, fetchPlan, mappers);
         }
 
         /**
@@ -88,7 +88,7 @@ public class DaoFactory implements AutoCloseable {
          * @return El gestor de logging solicitado.
          */
         public LoggingManager loggingManager() {
-            TransactionManager tm = TransactionManager.get(key());
+            TransactionManager tm = jc.getTransactionManager();
             return tm.getContext().getEventListener(LoggingManager.KEY, LoggingManager.class);
         }
 
@@ -98,23 +98,23 @@ public class DaoFactory implements AutoCloseable {
          * @return El gestor de caché solicitado.
          */
         public CacheManager cacheManager() {
-            TransactionManager tm = TransactionManager.get(key());
+            TransactionManager tm = jc.getTransactionManager();
             return tm.getContext().getEventListener(CacheManager.KEY, CacheManager.class);
         }
     }
 
     /**
      * Constructor privado para la fábrica de DAOs.
-     * @param cp Pool de conexiones que utiliza la fábrica de DAOs.
+     * @param jc Pool de conexiones que utiliza la fábrica de DAOs.
      * @param sqlQueryFactory Fábrica de consultas SQL que utiliza la fábrica de DAOs.
      * @param crudClass Clase que implementa las operaciones CRUD.
      * @param fetchPlan Plan predefinido para la carga de relaciones.
      * @param mappers Mapa de mappers de entidades.
      */
-    private DaoFactory(JdbcConnection cp, SqlQueryFactory sqlQueryFactory, Class<? extends AbstractCrud<?>> crudClass, FetchPlan fetchPlan, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
-        this.cp = cp;
+    private DaoFactory(JdbcConnection jc, SqlQueryFactory sqlQueryFactory, Class<? extends AbstractCrud<?>> crudClass, FetchPlan fetchPlan, Map<Class<? extends Entity>, EntityMapper<? extends Entity>> mappers) {
+        this.jc = jc;
         /** Gestor de transacciones con soporte para logging y cacheo */
-        cp.initTransactionManager(Map.of(
+        jc.withTransactionManager(Map.of(
             LoggingManager.KEY, logManager,
             CacheManager.KEY, cacheManager)
         );
@@ -130,7 +130,7 @@ public class DaoFactory implements AutoCloseable {
      * @return La información de esta factoría.
      */
     public DaoData getDaoData() {
-        return new DaoData(getKey(), cp, cp.getTransactionManager(), sqlQueryFactory, crudClass, fetchPlan, new HashMap<>(mappers));
+        return new DaoData(getKey(), jc, jc.getTransactionManager(), sqlQueryFactory, crudClass, fetchPlan, new HashMap<>(mappers));
     }
 
     /**
@@ -321,7 +321,7 @@ public class DaoFactory implements AutoCloseable {
      * @return Gestor de transacciones para DAOs.
      */
     public TransactionManager getTransactionManager() {
-        return cp.getTransactionManager();
+        return jc.getTransactionManager();
     }
 
     /**
@@ -329,7 +329,7 @@ public class DaoFactory implements AutoCloseable {
      * @return La clave solicitada.
      */
     public String getKey() {
-        return cp.getKey();
+        return jc.getKey();
     }
 
     /**
@@ -337,13 +337,13 @@ public class DaoFactory implements AutoCloseable {
      * @return {@code true} si está abierto.
      */
     public boolean isOpen() {
-        return cp.isOpen();
+        return jc.isOpen();
     }
 
     @Override
     public void close() {
         if(instances.remove(getKey(), this)) {
-            cp.close();
+            jc.close();
             logger.debug("Borrado DaoFactory asociado a la clave {}", getKey());
         }
     }

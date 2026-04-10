@@ -74,6 +74,28 @@ public class TransactionManager extends BaseTransactionManager<EntityManager> {
     }
 
     /**
+     * Crea una nueva instancia de {@link TransactionManager} que no se registra en el mapa de instancias.
+     * Este método es interno y no debería usarse directamente. Está pensado para que la clase
+     * {@link edu.acceso.sqlutils.jpa.JpaConnection} gestione su propio {@link TransactionManager},
+     * de modo que sólo sea accesible a través de ella.
+     * @param emf El {@link EntityManagerFactory} que se usará para obtener EntityManagers en esta instancia.
+     * @return La nueva instancia creada.
+     * @throws NullPointerException Si el {@link EntityManagerFactory} proporcionado es null.
+     */
+    public static TransactionManager createInternal(EntityManagerFactory emf) {
+        Objects.requireNonNull(emf, "Debe proporcionarse un EntityManagerFactory para crear un gestor de transacciones JPA");
+        String key = "internal-%d".formatted(System.identityHashCode(emf));
+        return new TransactionManager(key, emf);
+    }
+
+     /**
+     * Devuelve la instancia de {@link TransactionManager} registrada con la clave proporcionada.
+     * @param key La clave única que identifica al gestor de transacciones deseado.
+     * @return La instancia de {@link TransactionManager} registrada con la clave proporcionada.
+     * @throws IllegalStateException Si no existe una instancia de {@link TransactionManager} registrada con la clave proporcionada.
+     */
+
+    /**
      * Devuelve la instancia de {@link TransactionManager} registrada con la clave proporcionada.
      * @param key La clave única que identifica al gestor de transacciones deseado.
      * @return La instancia de {@link TransactionManager} registrada con la clave proporcionada.

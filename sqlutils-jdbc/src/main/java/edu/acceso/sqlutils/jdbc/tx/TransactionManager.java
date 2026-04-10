@@ -75,6 +75,21 @@ public class TransactionManager extends BaseTransactionManager<Connection> {
     }
 
     /**
+     * Crea una nueva instancia de {@link TransactionManager} que no se registra en el mapa de instancias.
+     * Este método es interno y no debería usarse directamente. Está pensado para que la clase
+     * {@link edu.acceso.sqlutils.jdbc.JdbcConnection} gestione su propio {@link TransactionManager},
+     * de modo que sólo sea accesible a través de ella.
+     * @param ds El {@link DataSource} que se usará para obtener conexiones JDBC en esta instancia.
+     * @return La instancia creada.
+     * @throws NullPointerException Si el {@link DataSource} proporcionado es {@code null}.
+     */
+    public static TransactionManager createInternal(DataSource ds) {
+        Objects.requireNonNull(ds, "Debe proporcionarse un DataSource para crear un gestor de transacciones JDBC");
+        String key = "internal-%d".formatted(System.identityHashCode(ds));
+        return new TransactionManager(key, ds);
+    }
+
+    /**
      * Obtiene la instancia de {@link TransactionManager} registrada con la clave proporcionada.
      * @param key La clave única que identifica al gestor de transacciones que se desea obtener.
      * @return La instancia de {@link TransactionManager} asociada a la clave proporcionada.
