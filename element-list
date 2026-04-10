@@ -9,6 +9,7 @@ edu.acceso.sqlutils.jdbc.internal
 edu.acceso.sqlutils.jdbc.internal.tx
 edu.acceso.sqlutils.jdbc.tx
 edu.acceso.sqlutils.jpa
+edu.acceso.sqlutils.jpa.internal
 edu.acceso.sqlutils.jpa.internal.tx
 edu.acceso.sqlutils.jpa.tx
 edu.acceso.sqlutils.orm
