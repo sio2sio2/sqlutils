@@ -10,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import edu.acceso.sqlutils.errors.DataAccessException;
-import edu.acceso.sqlutils.internal.tx.event.TransactionExecution;
 import edu.acceso.sqlutils.tx.TransactionContext;
 import edu.acceso.sqlutils.tx.Transactionable;
 import edu.acceso.sqlutils.tx.TransactionableR;

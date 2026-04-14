@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils.internal.tx.event;
+package edu.acceso.sqlutils.internal.tx;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -11,7 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import edu.acceso.sqlutils.errors.DataAccessException;
-import edu.acceso.sqlutils.internal.tx.TransactionHandle;
 import edu.acceso.sqlutils.tx.TransactionContext;
 import edu.acceso.sqlutils.tx.event.ContextAwareEventListener;
 import edu.acceso.sqlutils.tx.event.EventListener;
@@ -23,7 +22,7 @@ import edu.acceso.sqlutils.tx.event.EventListenerContext;
  * eventos del ciclo (inicio, commit, rollback) a través de los EventListeners asociados a la transacción.
  * @param <R> El tipo de recurso que maneja el {@link TransactionHandle} asociado a esta ejecución como un objeto {@link java.sql.Connection}.
  */
-public class TransactionExecution<R> {
+class TransactionExecution<R> {
     private static Logger logger = LoggerFactory.getLogger(TransactionExecution.class);
 
     private final TransactionHandle<R> handle;

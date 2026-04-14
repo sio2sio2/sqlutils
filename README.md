@@ -1,8 +1,11 @@
 ## Sqlutils
 
-Sqlutils es una librería de interés meramente pedagógico para complementar [los apuntes el módulo de *Acceso a datos*](https://github.io/sio2sio2/acceso-datos)
-del ciclo formativo de grado superior de *Desarrollo de Aplicaciones Multiplataforma*. Fundamentalmente, simplifica la gestión de transacciones tanto si
-se programa con JBDC como con JPA y añade algunas posibilidades interesantes.
+Sqlutils es una librería de interés meramente pedagógico para complementar [los
+apuntes el módulo de *Acceso a datos*](https://github.io/sio2sio2/acceso-datos)
+del ciclo formativo de grado superior de *Desarrollo de Aplicaciones
+Multiplataforma*. Fundamentalmente, simplifica la gestión de transacciones
+tanto si se programa con JBDC como con JPA y añade algunas posibilidades
+interesantes.
 
 Consta de diversos módulos:
 
@@ -17,20 +20,25 @@ Las clases que no están pensadas para el uso, están incluidas dentro de paquet
 
 ### Definiciones generales
 
-Están contenidas en el módulo `sqlutils-core`, aunque el resto de módulos dependen de él, por lo que no
-es necesario incluirlo explícitamente en las dependencias.
+Están contenidas en el módulo `sqlutils-core`, aunque el resto de módulos
+dependen de él, por lo que no es necesario incluirlo explícitamente en las
+dependencias.
 
 `DataAccessException`  
-Define una excepción no protegida para todas las excepciones generadas por la librería.
+Define una excepción no protegida para todas las excepciones generadas por la
+librería.
 
 `DbmsSelector`  
-Es un enum que contiene la forma de las URLs y los drivers JDBC de los principales sistemas gestores de bases de datos: SQLite, MariaDB, MySQL, PostgreSQL, Oracle, MSSQL y H2. Simplifica la construcción de las URLs, la obtención del driver y la consulta sobre su soporte:
+Es un enum que contiene la forma de las URLs y los drivers JDBC de los
+principales sistemas gestores de bases de datos: SQLite, MariaDB, MySQL,
+PostgreSQL, Oracle, MSSQL y H2. Simplifica la construcción de las URLs, la
+obtención del driver y la consulta sobre su soporte:
 
 ```java
 // La cadena debe coincidir con algún valor de enum sin importar mayúsculas.
 DbmsSelector sgbd = DbmsSelector.fromString("sqlite"); // DbmsSelector.SQLITE
-if(sgbd.isSupported()) System.out.println("Se ha cargado sqlite-jdbc en el proyecto");
-String url = sgbd.getUrl("/tmp/mibase.db"); // jdbc:sqlite:/tmp/mibase.db
+if(sgbd.isSupported()) System.out.println("sqlite-jdbc está como dependencia en el proyecto");
+String url = sgbd.getUrl("/tmp/mibase.db" /*, host, port */); // jdbc:sqlite:/tmp/mibase.db
 ```
 
 ### JDBC
@@ -77,11 +85,15 @@ try (
 }
 ```
 
-El método necesita el objeto `Connection` y el `Statement` para poder cerrarlos al acabar. De ese modo, no se requerirá que los cerremos explícitamente.
-Si por el contrario, nuestra intención fuera que los objetos no se cerraran, podríamos pasar `null` en vez de los propios objetos.
+El método necesita el objeto `Connection` y el `Statement` para poder cerrarlos
+al acabar. De ese modo, no se requerirá que los cerremos explícitamente.  Si
+por el contrario, nuestra intención fuera que los objetos no se cerraran,
+podríamos pasar `null` en vez de los propios objetos.
 
 `<T> Stream<T> SqlUtils.resultSetToStream(Connection, Statement, ResultSet, CheckedFunction<ResultSet, T>)`  
-Hace la misma tarea que el método anterior, pero permite incluir una expresión lambda que toma el `ResultSet` de cada fila y lo convierte en un objeto `T`. La expresión lambda puede generar `SQLException`:
+Hace la misma tarea que el método anterior, pero permite incluir una expresión
+lambda que toma el `ResultSet` de cada fila y lo convierte en un objeto `T`. La
+expresión lambda puede generar `SQLException`:
 
 ```java
 /**
@@ -103,7 +115,7 @@ private static Centro resultToCentro(ResultSet rs) throws SQLException {
  * @throws DataAccessRuntimeException Si se produce algún error al obtener los centros.
  */
 public Stream<Centro> obtenerCentros() {
-    Connection conn = getConnection();  // Obtenemos una conexión a saber cómo
+    Connection conn = getConnection();  // Obtenemos una conexión, a saber cómo
     Statement stmt = conn.createStatement();
     ResultSet rs = stmt.executeQuery("SELECT * FROM Centro");
 
@@ -142,9 +154,10 @@ try(String sqlScript = Files.readString(script, StandardCharsets.UTF_8)) {
 ```
 
 `void SqlUtils.executeSQL(Connection, InputStream) throws SQLException, IOException`  
-Ejecuta un guión SQL haciendo uso del método anterior para descomponer en sentencias simples.
+Ejecuta un guión SQL echando mano del método anterior para descomponerlo en sentencias simples.
+Todas las sentencias forman parte de una misma transacción.
 
-Otra clase importante del módulo es `TransactionManager`, la cual implementa un
+Otra clase importante del módulo es TransactionManager, la cual implementa un
 gestor concurrente para el manejo de transacciones que libera al desarrollador de la
 responsabilidad de abrir y cerrar transacciones. Utiliza una patrón
 [Multiton](https://en.wikipedia.org/wiki/Multiton_pattern) y una clave para
@@ -157,14 +170,14 @@ TransactionManager tm = TransactionManager.create("BD", ds);  // ds es un DataSo
 // Ordenamos operaciones dentro de la transacción mediante una expresión lambda
 // ctxt es un contexto que proporciona datos relacionados con la transacción.
 tm.transaction(ctxt -> {
-    Connection conn = ctxt.connection();  // Conexión protegida frente a cierres manuales.
+    Connection conn = ctxt.handle();  // Conexión protegida frente a cierres manuales.
 
     // ... Operamos con la base de datos usando 'conn' ...
 });
 ```
 
 Soporta transacciones anidadas, pero el efecto de iniciar una transacción dentro
-de otra es, simplemente aumentar un contador interno (consultable a través del
+de otra es, simplemente, aumentar un contador interno (consultable a través del
 contexto): las operaciones se confirman o rechazan sólo al culminar la
 transacción raíz. 
 
@@ -237,8 +250,8 @@ tm.transaction(ctxt -> {
     CounterListener counter = ctxt.getEventListener(CounterListener.KEY, CounterListener.class);
 
     // ... Realizamos una operación de inserción cualquiera (p.ej. una inserción) ...
+    // Y una vez hecha
 
-    // Una vez hecha
     logger.sendMessage(
         getClass(),
         Level.DEBUG,                                    // Nivel de gravedad.
@@ -251,8 +264,9 @@ tm.transaction(ctxt -> {
 });
 ```
 
-La clase respeta el orden en que se registran los observadores. Al comenzar la transacción,
-se ejecuta en el orden en que se han registrado; y, al acabar, en el orden inverso.
+La clase respeta el orden en que se registran los observadores. Al comenzar la
+transacción, se ejecuta en el orden en que se han registrado; y, al acabar, en
+el orden inverso.
 
 Esta clase se puede usar de forma independiente, una vez que hayamos creado por
 nuestros medios el objeto `DataSource` que permite crear conexiones. Ahora bien,
@@ -274,7 +288,7 @@ try(JdbcConnection jc = JdbcConnection.create("DB", dbUrl, dbUser, dbPassword)) 
 En este caso, no hemos definido cómo crear el *pool* de conexiones, por lo que
 la librería intentará encontrar una implementación de la interfaz
 `DataSourceFactory`. Si hemos cargado el módulo `sqlutils-hikaricp`, se detectará
-la implemenación basada en [HikariCP](https://github.com/brettwooldridge/HikariCP)
+la implementación basada en [HikariCP](https://github.com/brettwooldridge/HikariCP)
 que incluye este módulo y se usará. En todo caso, se puede definir una clase que
 implemente esa interfaz y use otro mecanismo distinto.
 
@@ -361,9 +375,10 @@ try (JpaConnection jc = JpaConnection.create("UnidadPersistencia", props)) {
     TransactionManager tm = jc.getTransactioNManager();
 
     tm.transaction(ctxt -> {
+        // handle() devuelve un EntityManager (JPA), no un objeto Connection (JDBC)
         EntityManager em = ctxt.handle();
 
-        // ... Operaciones ...
+        // ... Operaciones usando em ...
     });
 }
 ```
