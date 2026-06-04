@@ -5,7 +5,7 @@ import java.util.Arrays;
 /**
  * Enumeración de Sistemas de Gestión de Bases de Datos (SGBD). Permite obtener
  * la URL de conexión JDBC correspondiente a cada SGBD ({@link #getUrl(String, String, Integer)}), así como buscar un SGBD
- * a partir de su nombre ({@link #fromString(String)}) o de una URL de conexión JDBC ({@link #fromUrl(String)}).
+ * a partir de su nombre ({@link #of(String)}) o de una URL de conexión JDBC ({@link #fromUrl(String)}).
  */
 public enum DbmsSelector {
 
@@ -57,7 +57,7 @@ public enum DbmsSelector {
      * @throws IllegalArgumentException si el SGBD no es reconocido.
      * @throws UnsupportedOperationException si el SGBD no tiene driver disponible.
      */
-    public static DbmsSelector fromString(String sgbd) {
+    public static DbmsSelector of(String sgbd) {
         DbmsSelector dbms = Arrays.stream(DbmsSelector.values())
             .filter(v -> v.name().equalsIgnoreCase(sgbd))
             .findFirst()
@@ -67,6 +67,21 @@ public enum DbmsSelector {
 
         return dbms;
     }
+
+    /**
+     * Devuelve el SGBD correspondiente a una cadena ("sqlite" devuelve SGBD.SQLITE).
+     *
+     * @param sgbd Cadena con el nombre del SGBD.
+     * @deprecated Renombrado a {@link #of(String)}.
+     * @return El SGBD correspondiente.
+     * @throws IllegalArgumentException si el SGBD no es reconocido.
+     * @throws UnsupportedOperationException si el SGBD no tiene driver disponible.
+     */
+    @Deprecated(since="4.3.0", forRemoval=true)
+    public static DbmsSelector fromString(String sgbd) {
+        return of(sgbd);
+    }
+    
 
     /**
      * Obtiene el SGBD correspondiente a una URL de conexión JDBC.

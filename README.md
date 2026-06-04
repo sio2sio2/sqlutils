@@ -132,7 +132,7 @@ try(Stream<Centro> centros = consultas.obtenerCentros()) {
 ```
 
 `boolean SqlUtils.isDatabaseEmpty(Connection conn)`  
-Comprueba si una base de datos tiene definido su esquema:
+Comprueba si una base de datos tiene ya definido su esquema:
 
 ```java
 boolean empty = SqlUtils.isDatabaseEmpty(conn);

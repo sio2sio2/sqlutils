@@ -261,7 +261,7 @@ class TransactionExecution<R> {
             if(cause instanceof RuntimeException re) throw re;
             if(cause instanceof DataAccessException re) throw re;
             if(cause instanceof Error re) throw re;
-            else throw new DataAccessException("Error en la transacción", cause);
+            else throw new DataAccessException("Error en la transacción [%s]".formatted(cause.getMessage()), cause);
         }
     }
 }

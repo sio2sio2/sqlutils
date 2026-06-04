@@ -310,7 +310,7 @@ public class SqlUtils {
     /**
      * Verifica si la base de datos ya ha sido inicializada.
      * @param conn Conexión a la base de datos.
-     * @return {@code true} si la base de datos tiene al menos una tabla de usuario, false en caso contrario.
+     * @return {@code true} si la base de datos no está inicializada; {@code false} en caso contrario.
      * @throws SQLException Si ocurre un error al acceder a los metadatos de la base de datos.
      */
     public static boolean isDatabaseEmpty(Connection conn) throws SQLException {
@@ -334,11 +334,11 @@ public class SqlUtils {
                 // Filtrar tablas del sistema según el SGBD
                 if (!isGenericSystemTable(tableName)) {
                     logger.debug("{} es una tabla de usuario. Se presupone que la base de datos está completamente inicializada.", tableName);
-                    return true; // Encontramos al menos una tabla de usuario
+                    return false; // Encontramos al menos una tabla de usuario
                 }
             }
         }
-        return false;
+        return true;
     }
 
     /**

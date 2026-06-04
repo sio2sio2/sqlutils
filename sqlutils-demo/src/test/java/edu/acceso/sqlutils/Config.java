@@ -152,7 +152,7 @@ public class Config {
             }
 
             try {
-                return DbmsSelector.fromString(value);
+                return DbmsSelector.of(value);
             } catch(IllegalArgumentException | UnsupportedOperationException e) {
                 throw new IllegalArgumentException(e.getMessage());
             }
@@ -265,12 +265,12 @@ public class Config {
 
         if(db == null || db.isBlank()) {
             db = DEFAULT_DATABASE;
-            sgbd = DbmsSelector.fromString(DEFAULT_DBMS);
+            sgbd = DbmsSelector.of(DEFAULT_DBMS);
             logger.info("No se indicó base de datos. Se usará base y gestor por defecto ({})", sgbd);
         }
 
         if(sgbd == null) {
-            sgbd = DbmsSelector.fromString(DEFAULT_DBMS);
+            sgbd = DbmsSelector.of(DEFAULT_DBMS);
             logger.info("No se indicó SGBD. Se usará el gestor por defecto: {}", sgbd);
         }
    }

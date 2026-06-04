@@ -81,7 +81,7 @@ public class SqlQueryFactory {
          * @return El propio Builder para encadenar llamadas.
          */
         public Builder<S> register(String dbmsName, Class<? extends S> sqlQueryClass) {
-            DbmsSelector dbms = dbmsName.equals("*") ? null : DbmsSelector.fromString(dbmsName);
+            DbmsSelector dbms = dbmsName.equals("*") ? null : DbmsSelector.of(dbmsName);
             return register(dbms, sqlQueryClass);
         }
 
