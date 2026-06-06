@@ -118,7 +118,10 @@ public class JpaConnection extends BaseConnection<TransactionManager> {
 
     /** Obtiene el DataSource asociado al pool de conexiones
      * @return El DataSource asociado
+     * @deprecated Es más que aconsejable asociar un gestor de transacción para
+     *    gestionar las conexiones. Véase {@link BaseConnection#withTransactionManager()}.
      */
+    @Deprecated(since = "4.2.1", forRemoval = false)
     public EntityManagerFactory getEntityManagerFactory() {
         if(tm != null) logger.warn("Hay un gestor de transacciones asociado a este pool '{}'. A menos de que esté seguro de lo que hace, debería obtener las conexiones a través de él.", key);
 
