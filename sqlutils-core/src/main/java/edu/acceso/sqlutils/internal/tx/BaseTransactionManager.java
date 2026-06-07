@@ -78,7 +78,10 @@ public abstract class BaseTransactionManager<R> {
      * Devuelve el recurso asociado a la transacción activa, que puede ser un {@link java.sql.Connection}, un {@link jakarta.persistence.EntityManager}, etc.
      * @return El recurso solicitado.
      * @throws IllegalStateException Si no hay una transacción activa en el hilo actual. 
+     * @deprecated Se recomienda acceder al recurso a través del contexto que proporciona la versión funcional
+     *   (véase {@link #transaction(TransactionableR)} o {@link #transaction(Transactionable)}).
      */
+    @Deprecated(since = "4.3.2", forRemoval = false)
     public R getHandle() {
         return getContext().handle();
     }
@@ -87,7 +90,10 @@ public abstract class BaseTransactionManager<R> {
      * Obtiene el contexto de la transacción actual.
      * @return El contexto solicitado.
      * @throws IllegalStateException Si no hay una transacción activa en el hilo actual.
+     * @deprecated Se recomienda acceder al contexto creando la transacción a través de la versión funcional
+     * (véanse los métodos {@link #transaction(TransactionableR)} o {@link #transaction(Transactionable)})).
      */
+    @Deprecated(since = "4.3.2", forRemoval = false)
     public TransactionContext<R> getContext() {
         if(!isActive()) throw new IllegalStateException("No hay ninguna transacción activa en el hilo '%s'".formatted(Thread.currentThread().getName()));
         return contextHolder.get().getContext();
@@ -159,7 +165,7 @@ public abstract class BaseTransactionManager<R> {
 
         try {
             context.begin();
-            value = operations.run(this.getContext());
+            value = operations.run(context.getContext());
             context.commit();
         } catch (Throwable e) {
             context.rollback(e);
