@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import edu.acceso.sqlutils.internal.BaseConnection;
+import edu.acceso.sqlutils.jdbc.SqlAssistant.SqlAssistantConfig;
 import edu.acceso.sqlutils.jdbc.tx.TransactionManager;
 import edu.acceso.sqlutils.tx.event.EventListener;
 
@@ -34,6 +35,12 @@ public class JdbcConnection extends BaseConnection<TransactionManager> {
      * El DataSource que se usará para obtener conexiones JDBC en esta instancia de pool de conexiones.
      */
     private final DataSource ds;
+
+    /**
+     * Asistente SQL que proporciona métodos para ejecutar consultas y actualizaciones SQL de manera más sencilla.
+     * Se inicializa cuando se invoca el método {@link #withSqlAssistant()}.
+     */
+    private SqlAssistant sqlAssistant;
 
     /**
      * Constructor privado para crear una nueva instancia de {@link JdbcConnection}.
@@ -125,7 +132,6 @@ public class JdbcConnection extends BaseConnection<TransactionManager> {
     @Deprecated(since = "4.3.1", forRemoval = false)
     public DataSource getDataSource() {
         if(tm != null) logger.warn("Hay un gestor de transacciones asociado a este pool '{}'. A menos de que esté seguro de lo que hace, debería obtener las conexiones a través de él.", key);
-
         return ds;
     }
 
@@ -142,6 +148,38 @@ public class JdbcConnection extends BaseConnection<TransactionManager> {
     @Override
     public JdbcConnection withTransactionManager(Map<String, EventListener> listeners) {
         return (JdbcConnection) super.withTransactionManager(listeners);
+    }
+
+    /**
+     * Asocia un asistente SQL a este pool de conexiones, que proporciona métodos para ejecutar consultas y actualizaciones SQL de manera más sencilla.
+     * @param config Configuración del asistente SQL. Puede ser nula, en cuyo caso se utilizará la configuración por defecto.
+     * @return Esta misma instancia de {@link JdbcConnection}, para permitir encadenar llamadas.
+     * @throws IllegalStateException Si no se ha asociado un gestor de transacciones a este pool de conexiones. Debe haberse invocado primero {@link #withTransactionManager()}.
+     */
+    public JdbcConnection withSqlAssistant(SqlAssistantConfig config) {
+        if(tm == null) throw new IllegalStateException("No hay gestor de transacciones asociado a este pool de conexiones. Debe haberse invocado primero {@link #withTransactionManager()} antes de invocar {@link #withSqlAssistant()}.");
+
+        sqlAssistant = new SqlAssistant(tm, config);
+        return this;
+    }
+
+    /**
+     * Asocia un asistente SQL a este pool de conexiones, utilizando la configuración por defecto.
+     * @return Esta misma instancia de {@link JdbcConnection}, para permitir encadenar llamadas.
+     * @throws IllegalStateException Si no se ha asociado un gestor de transacciones a este pool de conexiones. Debe haberse invocado primero {@link #withTransactionManager()}.
+     */
+    public JdbcConnection withSqlAssistant() {
+        return withSqlAssistant(null);
+    }
+
+    /**
+     * Obtiene el asistente SQL asociado a este pool de conexiones.
+     * @return El asistente SQL asociado.
+     * @throws IllegalStateException Si no se ha asociado un asistente SQL a este pool de conexiones. Debe haberse invocado primero {@link #withSqlAssistant()}.
+     */
+    public SqlAssistant getSqlAssistant() {
+        if(sqlAssistant == null) throw new IllegalStateException("No hay asistente SQL asociado a este pool de conexiones. Debe invocar primero withSqlAssistant() antes de invocar getSqlAssistant().");
+        return sqlAssistant;
     }
 
     /**

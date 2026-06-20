@@ -309,11 +309,39 @@ try (JdbcConnection jc = JdbcConnection.create("DB", dbUrl, dbUser, dbPassword))
     tm.transaction(ctxt -> {
         Connection conn = ctxt.handle();
 
-        // ... Operaciones ...
+        // ... Operaciones SQL...
 
     });
 }
 ```
+
+Para facilitar la codificación de operaciones SQL, junto al gestor de transacciones se puede crear
+un asistente de operaciones muy parecido al que existe en [Spring](https://spring.io/):
+
+```java
+try (JdbcConnection jc = JdbcConnection.create("DB", dbUrl, dbUser, dbPassword)) {
+    jc.withTransactionManager(Map.of(
+        LoggingManager.KEY, new LoggingManager(),
+        CounterListener.KEY, new CounterListener(),
+    )).withSqlAssistant();
+
+    SqlAssistant sa = jc.getSqlAssistant();
+
+    // Obtención de un objeto.
+    String sqlString = "SELECT * FROM Centro WHERE id = ?";
+    Optional<Centro> centro = sa.selectOne(sqlString, (rs, intRow) -> paramsToCentro(rs),  11004866L);
+
+    // Obtención de varios objetos.
+    sqlString = "SELECT * FROM Centro WHERE titularidad = ?";
+    List<Centro> centros = sa.select(sqlString, (rs, intRow) -> paramsToCentro(rs), 'PUBLICA');
+
+    // Inserción de un centro.
+    sqlString = "INSERT INTO Centro (nombre, titularidad, id) VALUES (?, ?, ?)";
+    sa.execute(sqlString, 'IES Castillo de Luna', 'PUBLICA', 11004866L);
+}
+```
+
+Eche un ojo a ``SqlAssistant`` para ver todas las posibilidades.
 
 ### JPA
 
@@ -367,7 +395,7 @@ de forma independiente):
 // Suponiendo que en persistence.xml hemos definido una unidad de persistencia
 // y tenemos un mapa con props que define en tiempo de ejecución propiedades
 try (JpaConnection jc = JpaConnection.create("UnidadPersistencia", props)) {
-    jc.initTransactionManager(Map.of(
+    jc.withTransactionManager(Map.of(
         LoggingManager.KEY, new LoggingManager(),
         CounterListener.KEY, new CounterListener(),
     ));
