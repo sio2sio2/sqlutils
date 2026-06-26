@@ -18,7 +18,7 @@ import org.slf4j.event.Level;
 
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.jdbc.tx.TransactionManager;
-import edu.acceso.sqlutils.tx.event.LoggingManager;
+import edu.acceso.sqlutils.tx.TransactionContext;
 
 /**
  * Clase auxiliar que permite abreviar la escritura de las operaciones SQL.
@@ -49,26 +49,48 @@ public class SqlAssistant {
     private final SqlAssistantConfig config;
 
     /**
-     * Registro de configuración para la clase SqlAssistant.
-     * @param log Indica si se debe registrar la información de las consultas SQL.
-     * @param level Nivel de registro para las consultas SQL.
+     * Interfaz funcional que representa una operación que acepta tres argumentos y no devuelve ningún resultado.
+     * @param <T> Tipo del primer argumento.
+     * @param <U> Tipo del segundo argumento.
+     * @param <V> Tipo del tercer argumento.
      */
-    public static record SqlAssistantConfig(boolean log, Level level) {
+    @FunctionalInterface
+    public static interface TriConsumer<T, U, V> {
+        void accept(T t, U u, V v);
+    }
+
+    /**
+     * Registro de configuración para la clase SqlAssistant.
+     * @param level Nivel de registro para las consultas SQL.
+     * @param logger Función para registrar mensajes de transacción.
+     */
+    public static record SqlAssistantConfig(boolean log, Level level, TriConsumer<TransactionContext<Connection>, String, String> logger) {
 
         /**
          * Constructor por defecto de la clase SqlAssistantConfig.
-         * Por defecto, se habilita el registro de consultas SQL y se establece el nivel de registro en TRACE.
+         * Por defecto, se deshabilita el registro de consultas SQL.
          */
         public SqlAssistantConfig() {
-            this(true, Level.TRACE);
+            this(false, null, null);
+        }
+
+        /**
+         * Constructor de la clase SqlAssistantConfig que permite habilitar o deshabilitar el registro de consultas SQL.
+         * @param level Nivel de registro para las consultas SQL. Si es {@code null}, se deshabilita el registro de consultas SQL.
+         * En caso contrario, para registrar mensajes, se utiliza el logger de la clase SqlAssistant con el nivel especificado,
+         * por lo que podrán existir registros engañosos si las transacciones de varias operaciones no se confirman.
+         */
+        public SqlAssistantConfig(Level level) {
+            this(level == null ? false : true, level, null);
         }
 
         /**
          * Constructor de la clase SqlAssistantConfig.
-         * @param level Nivel de registro para las consultas SQL. Si es nulo, se deshabilita el registro de consultas SQL.
+         * @param logger Función para registrar mensajes que informan de la realización de la operación SQL. Si
+         * es {@code null}, se deshabilita el registro de consultas SQL.
          */
-        public SqlAssistantConfig(Level level) {
-            this(level == null ? false : true, level);
+        public SqlAssistantConfig(TriConsumer<TransactionContext<Connection>, String, String> logger) {
+            this(logger == null ? false : true, Level.TRACE, logger);
         }
     }
 
@@ -296,6 +318,18 @@ public class SqlAssistant {
     }
 
     /**
+     * Envía un mensaje de error al registro.
+     * @param ctxt El contexto de la transacción.
+     * @param message El mensaje a enviar.
+     * @param notCommittedMessage El mensaje cuando falla la transacción y la transacción no se confirma.
+     */
+    private void sendMessage(TransactionContext<Connection> ctxt, String message, String notCommittedMessage) {
+        if(!config.log) return;
+        if(config.logger != null) config.logger.accept(ctxt, message, notCommittedMessage);
+        else logger.atLevel(config.level).log(message);
+    }
+
+    /**
      * Ejecuta una consulta SQL que no devuelve resultados (por ejemplo, una actualización o eliminación).
      * @param sqlString La cadena SQL de la consulta
      * @param sqlTypes El array de tipos SQL de los parámetros
@@ -312,21 +346,17 @@ public class SqlAssistant {
 
         tm.transaction(ctxt -> {
             Connection conn = ctxt.handle();
-            LoggingManager lm = ctxt.getEventListener(LoggingManager.KEY, LoggingManager.class);
 
             try(PreparedStatement stmt = conn.prepareStatement(sqlString)) {
                 for(int i = 0; i < params.length; i++) {
                     setObject(stmt, i + 1, params[i], sqlTypes[i]);
                 }
                 int rowsAffected = stmt.executeUpdate();
-                if(config.log) {
-                    lm.sendMessage(
-                        getClass(),
-                        config.level,
-                        "Operacion SQL ejecutada: %s. Cantidad de final afectadas: %s".formatted(sqlString, rowsAffected),
-                        "Transacción fallida: Se cancela la operación SQL '%s'".formatted(sqlString)
-                    );
-                }
+                sendMessage(
+                    ctxt,
+                    "Operacion SQL ejecutada: %s. Cantidad de final afectadas: %s".formatted(sqlString, rowsAffected),
+                    "Transacción fallida: Se cancela la operación SQL '%s'".formatted(sqlString)
+                );
             } catch (SQLException e) {
                 logger.error("Error ejecutando consulta SQL: {}", e.getMessage());
                 throw new DataAccessException("Error en la consulta: %s".formatted(e.getMessage()), e);
@@ -364,7 +394,6 @@ public class SqlAssistant {
 
         return tm.transaction(ctxt -> {
             Connection conn = ctxt.handle();
-            LoggingManager lm = ctxt.getEventListener(LoggingManager.KEY, LoggingManager.class);
 
             try(PreparedStatement stmt = conn.prepareStatement(sqlString)) {
                 for(Object[] params : batchParams) {
@@ -377,14 +406,11 @@ public class SqlAssistant {
                     stmt.addBatch();
                 }
                 int[] rowsAffected = stmt.executeBatch();
-                if(config.log) {
-                    lm.sendMessage(
-                        getClass(),
-                        config.level,
-                        "Operacion SQL ejecutada: %s. Resultados: %s".formatted(sqlString, Arrays.toString(rowsAffected)),
-                        "Transacción fallida: Se cancela la operación SQL '%s'".formatted(sqlString)
-                    );
-                }
+                sendMessage(
+                    ctxt,
+                    "Operacion SQL ejecutada: %s. Resultados: %s".formatted(sqlString, Arrays.toString(rowsAffected)),
+                    "Transacción fallida: Se cancela la operación SQL '%s'".formatted(sqlString)
+                );
                 return rowsAffected;
             } catch (SQLException e) {
                 logger.error("Error ejecutando consulta SQL en batch: {}", e.getMessage());
@@ -424,19 +450,15 @@ public class SqlAssistant {
 
         tm.transaction(ctxt -> {
             Connection conn = ctxt.handle();
-            LoggingManager lm = ctxt.getEventListener(LoggingManager.KEY, LoggingManager.class);
 
             try {
                 try(PreparedStatement stmt = executor.execute(conn)) {
                     stmt.executeUpdate();
-                    if(config.log) {
-                        lm.sendMessage(
-                            getClass(),
-                            config.level,
-                            "Operacion SQL ejecutada",
-                            "Transacción fallida: Se cancela la operación SQL"
-                        );
-                    }
+                    sendMessage(
+                        ctxt,
+                        "Operacion SQL ejecutada",
+                        "Transacción fallida: Se cancela la operación SQL"
+                    );
                     if(idHandler != null) {
                         try(ResultSet rs = stmt.getGeneratedKeys()) {
                             while(rs.next()) {
