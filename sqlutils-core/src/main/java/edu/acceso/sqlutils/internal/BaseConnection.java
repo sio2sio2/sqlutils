@@ -1,11 +1,15 @@
 package edu.acceso.sqlutils.internal;
 
 import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import edu.acceso.sqlutils.DataSourceFactory;
 import edu.acceso.sqlutils.internal.tx.BaseTransactionManager;
 import edu.acceso.sqlutils.tx.event.EventListener;
 
@@ -29,13 +33,30 @@ public abstract class BaseConnection<TM extends BaseTransactionManager<?>> imple
      */
     protected volatile TM tm;
     
+    /** Fábrica por defecto para crear DataSources: se busca en el classpath */
+    protected static final DataSourceFactory DEFAULT_DS_FACTORY = ServiceLoader.load(DataSourceFactory.class)
+        .findFirst()
+        .orElse(null);
+
+    /**
+     * El DataSource que se usará para obtener conexiones JDBC en esta instancia de pool de conexiones.
+     */
+    protected final DataSource ds;
 
     /**
      * Constructor que asigna la clave a la conexión.
-     * @param key La clave que identifica a la conexión. 
+     * @param key La clave que identifica a la conexión.
+     * @param dbUrl La URL de la base de datos.
+     * @param user El usuario para la conexión.
+     * @param password La contraseña para la conexión.
+     * @param dsFactory La fábrica de DataSources.
      */
-    protected BaseConnection(String key) {
+    protected BaseConnection(String key, String dbUrl, String user, String password, DataSourceFactory dsFactory) {
         this.key = key;
+        if(dsFactory == null) dsFactory = DEFAULT_DS_FACTORY;
+        this.ds = dsFactory != null
+            ? dsFactory.create(dbUrl, user, password)
+            : null;
     }
 
     /**

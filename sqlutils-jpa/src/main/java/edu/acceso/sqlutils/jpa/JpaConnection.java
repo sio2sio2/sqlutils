@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import edu.acceso.sqlutils.DataSourceFactory;
 import edu.acceso.sqlutils.internal.BaseConnection;
 import edu.acceso.sqlutils.jpa.tx.TransactionManager;
 import edu.acceso.sqlutils.tx.event.EventListener;
@@ -48,8 +49,16 @@ public class JpaConnection extends BaseConnection<TransactionManager> {
      * @param persistenceUnit El nombre de la unidad de persistencia.
      * @param props El mapa que define las propiedades definidas en tiempo de ejecución.
      */
-    private JpaConnection(String persistenceUnit, Map<String, String> props) {
-        super(persistenceUnit);
+    private JpaConnection(String persistenceUnit, String dbUrl, String user, String password, DataSourceFactory dsFactory, Map<String, Object> props) {
+        super(persistenceUnit, dbUrl, user, password, dsFactory);
+        if(ds != null) {
+            props.put("jakarta.persistence.nonJtaDataSource", ds);
+            // Eliminamos las propiedades de conexión para que no se usen en la creación del EntityManagerFactory, ya que estamos usando un DataSource externo.
+            props.remove("jakarta.persistence.jdbc.url");
+            props.remove("jakarta.persistence.jdbc.user");
+            props.remove("jakarta.persistence.jdbc.password");
+        }
+        else logger.warn("Se usará el pool interno de conexiones proporcionado por el proveedor JPA. Tenga presente que esto puede dar problemas de rendimiento en entornos de producción.");
         this.emf = Persistence.createEntityManagerFactory(persistenceUnit, props);
     }
 
@@ -61,11 +70,26 @@ public class JpaConnection extends BaseConnection<TransactionManager> {
      * @throws IllegalStateException Si la instancia ya existe.
      * @throws IllegalArgumentException Si no hay DataSourceFactory disponible ni se ha proporcionado como argumento.
      */
-    public static JpaConnection create(String persistenceUnit, Map<String, String> props) {
+    public static JpaConnection create(String persistenceUnit, Map<String, Object> props) {
         Objects.requireNonNull(persistenceUnit, "El nombre de la unidad de persistencia no puede ser nulo");
         if(props == null) props = Collections.emptyMap();
 
-        JpaConnection instance = new JpaConnection(persistenceUnit, props);
+        String dbUrl = (String) props.get("jakarta.persistence.jdbc.url");
+        String user = (String) props.get("jakarta.persistence.jdbc.user");
+        String password = (String) props.get("jakarta.persistence.jdbc.password");
+
+        boolean missingConf = !props.containsKey("jakarta.persistence.jdbc.url")
+            || !props.containsKey("jakarta.persistence.jdbc.user")
+            || !props.containsKey("jakarta.persistence.jdbc.password");
+
+        if(missingConf) {
+            throw new IllegalArgumentException("Para crear una instancia de JpaConnection, se deben proporcionar las propiedades 'jakarta.persistence.jdbc.url', 'jakarta.persistence.jdbc.user' y 'jakarta.persistence.jdbc.password' de forma dinámica.");
+        }
+
+        // Propiedad propia para definir el DataSourceFactory que usará la conexión.
+        DataSourceFactory dsFactory = (DataSourceFactory) props.get("sqlutils.datasource.factory");
+
+        JpaConnection instance = new JpaConnection(persistenceUnit, dbUrl, user, password, dsFactory, props);
 
         if(instances.putIfAbsent(persistenceUnit, instance) != null) {
             logger.debug("Otro hilo creó una instancia para la unidad de persistencia {}: cerrando la recién creada", persistenceUnit);

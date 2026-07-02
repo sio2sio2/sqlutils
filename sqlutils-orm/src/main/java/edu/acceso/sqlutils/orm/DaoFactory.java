@@ -7,9 +7,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import edu.acceso.sqlutils.DataSourceFactory;
 import edu.acceso.sqlutils.DbmsSelector;
 import edu.acceso.sqlutils.jdbc.JdbcConnection;
-import edu.acceso.sqlutils.jdbc.DataSourceFactory;
 import edu.acceso.sqlutils.jdbc.tx.TransactionManager;
 import edu.acceso.sqlutils.orm.mapper.EntityMapper;
 import edu.acceso.sqlutils.orm.minimal.Entity;

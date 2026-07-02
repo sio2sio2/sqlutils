@@ -3,13 +3,13 @@ package edu.acceso.sqlutils.jdbc;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.ServiceLoader;
 
 import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import edu.acceso.sqlutils.DataSourceFactory;
 import edu.acceso.sqlutils.internal.BaseConnection;
 import edu.acceso.sqlutils.jdbc.SqlAssistant.SqlAssistantConfig;
 import edu.acceso.sqlutils.jdbc.tx.TransactionManager;
@@ -23,18 +23,8 @@ import edu.acceso.sqlutils.tx.event.EventListener;
 public class JdbcConnection extends BaseConnection<TransactionManager> {
     private static final Logger logger = LoggerFactory.getLogger(JdbcConnection.class);
 
-    /** Fábrica por defecto para crear DataSources: se busca en el classpath */
-    private static final DataSourceFactory DEFAULT_DS_FACTORY = ServiceLoader.load(DataSourceFactory.class)
-        .findFirst()
-        .orElse(null);
-
     /** Mapa con las instancias creadas **/
     private static final Map<String, JdbcConnection> instances = new ConcurrentHashMap<>();
-
-    /**
-     * El DataSource que se usará para obtener conexiones JDBC en esta instancia de pool de conexiones.
-     */
-    private final DataSource ds;
 
     /**
      * Asistente SQL que proporciona métodos para ejecutar consultas y actualizaciones SQL de manera más sencilla.
@@ -51,8 +41,10 @@ public class JdbcConnection extends BaseConnection<TransactionManager> {
      * @param dsFactory Fábrica de DataSource.
      */
     private JdbcConnection(String key, String dbUrl, String user, String password, DataSourceFactory dsFactory) {
-        super(key);
-        ds = dsFactory.create(dbUrl, user, password);
+        super(key, dbUrl, user, password, dsFactory);
+        if(ds == null) {
+            throw new IllegalArgumentException("No se ha encontrado ningún DataSourceFactory en el classpath. Asegúrese de incluir una implementación, como sqlutils-hikaricp, en las dependencias del proyecto o defina la suya propia.");
+        }
     }
 
     /**
@@ -68,11 +60,6 @@ public class JdbcConnection extends BaseConnection<TransactionManager> {
      */
     public static JdbcConnection create(String key, String dbUrl, String user, String password, DataSourceFactory dsFactory) {
         Objects.requireNonNull(key, "La clave no puede ser nula");
-        if(dsFactory == null) dsFactory = DEFAULT_DS_FACTORY;
-        if(dsFactory == null) {
-            throw new IllegalArgumentException("No se ha encontrado ningún DataSourceFactory en el classpath. Asegúrese de incluir una implementación, como sqlutils-hikaricp, en las dependencias del proyecto o defina la suya propia.");
-        }
-
 	    JdbcConnection instance = new JdbcConnection(key, dbUrl, user, password, dsFactory);
 
         if(instances.putIfAbsent(key, instance) != null) {
