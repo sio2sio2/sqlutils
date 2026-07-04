@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils.hikari;
+package edu.acceso.sqlutils.datasource.hikari;
 
 import javax.sql.DataSource;
 

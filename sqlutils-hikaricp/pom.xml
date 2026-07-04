@@ -22,7 +22,7 @@
 
         <dependency>
             <groupId>edu.acceso.sqlutils</groupId>
-            <artifactId>sqlutils-jdbc</artifactId>
+            <artifactId>sqlutils-core</artifactId>
             <version>${project.version}</version>
         </dependency>
 

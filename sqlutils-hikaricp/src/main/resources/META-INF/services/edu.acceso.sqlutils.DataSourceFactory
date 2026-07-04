@@ -1,1 +1,1 @@
-edu.acceso.sqlutils.hikari.HikariCPFactory
+edu.acceso.sqlutils.datasource.hikari.HikariCPFactory
