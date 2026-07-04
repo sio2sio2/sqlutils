@@ -5,6 +5,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
+import javax.sql.DataSource;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,9 +53,10 @@ public class JpaConnection extends BaseConnection<TransactionManager> {
      */
     private JpaConnection(String persistenceUnit, String dbUrl, String user, String password, DataSourceFactory dsFactory, Map<String, Object> props) {
         super(persistenceUnit, dbUrl, user, password, dsFactory);
+        // Si se definió un Datasource externo, lo añadimos a las propiedades para que se use en la creación del EntityManagerFactory,
+        // y se eliminan las propiedades de conexión porque ya no las necesita el proveedor JPA.
         if(ds != null) {
             props.put("jakarta.persistence.nonJtaDataSource", ds);
-            // Eliminamos las propiedades de conexión para que no se usen en la creación del EntityManagerFactory, ya que estamos usando un DataSource externo.
             props.remove("jakarta.persistence.jdbc.url");
             props.remove("jakarta.persistence.jdbc.user");
             props.remove("jakarta.persistence.jdbc.password");
@@ -86,8 +89,16 @@ public class JpaConnection extends BaseConnection<TransactionManager> {
             throw new IllegalArgumentException("Para crear una instancia de JpaConnection, se deben proporcionar las propiedades 'jakarta.persistence.jdbc.url', 'jakarta.persistence.jdbc.user' y 'jakarta.persistence.jdbc.password' de forma dinámica.");
         }
 
-        // Propiedad propia para definir el DataSourceFactory que usará la conexión.
-        DataSourceFactory dsFactory = (DataSourceFactory) props.get("sqlutils.datasource.factory");
+        // Si se pasó directamente un DataSource, es el que se usa; si no, se busca un DataSourceFactory en las propiedades.
+        DataSource ds = (DataSource) props.get("jakarta.persistence.nonJtaDataSource");
+        DataSourceFactory dsFactory = ds != null
+             ? new DataSourceFactory() {
+                    @Override
+                    public DataSource create(String url, String user, String password) {
+                        return ds;
+                    }
+                }
+             : (DataSourceFactory) props.get("sqlutils.datasource.factory");
 
         JpaConnection instance = new JpaConnection(persistenceUnit, dbUrl, user, password, dsFactory, props);
 
