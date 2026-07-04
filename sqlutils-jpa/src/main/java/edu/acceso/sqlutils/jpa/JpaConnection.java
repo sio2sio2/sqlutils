@@ -56,6 +56,7 @@ public class JpaConnection extends BaseConnection<TransactionManager> {
         // Si se definió un Datasource externo, lo añadimos a las propiedades para que se use en la creación del EntityManagerFactory,
         // y se eliminan las propiedades de conexión porque ya no las necesita el proveedor JPA.
         if(ds != null) {
+            props = new java.util.HashMap<>(props);
             props.put("jakarta.persistence.nonJtaDataSource", ds);
             props.remove("jakarta.persistence.jdbc.url");
             props.remove("jakarta.persistence.jdbc.user");
