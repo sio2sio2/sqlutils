@@ -77,20 +77,18 @@ public class JpaConnection extends BaseConnection<TransactionManager> {
         Objects.requireNonNull(persistenceUnit, "El nombre de la unidad de persistencia no puede ser nulo");
         if(props == null) props = Collections.emptyMap();
 
+        DataSource ds = (DataSource) props.get("jakarta.persistence.nonJtaDataSource");
         String dbUrl = (String) props.get("jakarta.persistence.jdbc.url");
         String user = (String) props.get("jakarta.persistence.jdbc.user");
         String password = (String) props.get("jakarta.persistence.jdbc.password");
 
-        boolean missingConf = !props.containsKey("jakarta.persistence.jdbc.url")
-            || !props.containsKey("jakarta.persistence.jdbc.user")
-            || !props.containsKey("jakarta.persistence.jdbc.password");
+        boolean missingConf = ds == null && !props.containsKey("jakarta.persistence.jdbc.url");
 
         if(missingConf) {
-            throw new IllegalArgumentException("Para crear una instancia de JpaConnection, se deben proporcionar las propiedades 'jakarta.persistence.jdbc.url', 'jakarta.persistence.jdbc.user' y 'jakarta.persistence.jdbc.password' de forma dinámica.");
+            throw new IllegalArgumentException("Para crear una instancia de JpaConnection, de proporcionar propiedades de conexión de forma dinámica.");
         }
 
         // Si se pasó directamente un DataSource, es el que se usa; si no, se busca un DataSourceFactory en las propiedades.
-        DataSource ds = (DataSource) props.get("jakarta.persistence.nonJtaDataSource");
         DataSourceFactory dsFactory = ds != null
              ? new DataSourceFactory() {
                     @Override
