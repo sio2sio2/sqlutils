@@ -354,11 +354,11 @@ Para programar con JPA, necesita el módulo `sqlutils-jpa`:
         <version>${sqlutils.version}</version> <!-- Sustituya por la versión que use -->
     </dependency>
 
-    <!-- Implementación de Hibernate para la especificación anterior -->
+    <!-- El proveedor JPA (Hibernate, por ejemplo) -->
     <dependency>
         <groupId>org.hibernate.orm</groupId>
         <artifactId>hibernate-core</artifactId>
-        <version>${hibernate.version}</version>     <!-- Una versión de Hibernate compatible con JPA 3.2.0 -->
+        <version>${hibernate.version}</version>     <!-- Alguna versión de Hibernate compatible con JPA 3.2.0 -->
         <scope>runtime</scope>
     </dependency>
 
@@ -370,7 +370,7 @@ Para programar con JPA, necesita el módulo `sqlutils-jpa`:
         <scope>runtime</scope>
     </dependency>
 
-    <!-- Soporte de Hibernate para el SGBD escogido -->
+    <!-- Soporte del proveedor JPA para el SGBD escogido -->
     <dependency>
         <groupId>org.hibernate.orm</groupId>
         <artifactId>hibernate-community-dialects</artifactId>
@@ -410,3 +410,12 @@ try (JpaConnection jc = JpaConnection.create("UnidadPersistencia", props)) {
     });
 }
 ```
+
+No obstante, en la versión para JPA también existe el problema de utilizar un *pool* de conexiones,
+ya que de lo contrario se usará el mecanismo interno que utilice el proveedor, el cual siempre
+está desaconsejado para producción. Tenemos varias alternativas:
+
+* Crear manualmente un objeto ``DataSource`` y proporcionarlo a través de la propiedad ``jakarta.persistence.nonJtaDataSource``.
+* Proporcionar dinámicamente los datos de conexión a través de las propiedades adecuadas
+  (``jakarta.persistence.jdbc.url``, etc.) y, como en el caso de la versión JDBC, proporcionar
+  una implementación de la interfaz ``DataSourceFactory`` (p.ej. cargando el módulo ``sqlutils-hikaricp``).

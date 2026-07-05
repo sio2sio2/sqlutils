@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence version="3.0"
+    xmlns="https://jakarta.ee/xml/ns/persistence"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="https://jakarta.ee/xml/ns/persistence 
+    https://jakarta.ee/xml/ns/persistence/persistence_3_0.xsd">
+
+    <!-- Nombre de la unidad de persistencia -->
+    <persistence-unit name="DB" transaction-type="RESOURCE_LOCAL">
+
+        <!-- Proveedor de JPA (Hibernate) -->
+        <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+
+        <!-- Entidades (deberían autodetectarse si están anotadas con @Entity) -->
+        <class>edu.acceso.sqlutils.modelo.Centro</class>
+        <class>edu.acceso.sqlutils.modelo.Estudiante</class>
+        <!-- Más clases ... -->
+
+        <properties>
+            <!-- NO DEBE INCLUIRSE NADA DE LA CONFIGURACIÓN DE CONEXIÓN A LA BASE DE DATOS-->
+
+            <!-- Configuración propia de Hibernate -->
+            <property name="hibernate.dialect" value="org.hibernate.community.dialect.SQLiteDialect"/>
+            <property name="hibernate.hbm2ddl.auto" value="update"/>
+            <property name="hibernate.show_sql" value="false"/>
+            <property name="hibernate.format_sql" value="true"/>
+            <property name="hibernate.use_sql_comments" value="true"/>
+        </properties>
+    </persistence-unit>
+</persistence>

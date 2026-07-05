@@ -27,7 +27,7 @@
    </modules>
 
     <properties>
-        <revision>4.5.4</revision>
+        <revision>4.5.5</revision>
         <!-- jitpack no reconoce release -->
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
@@ -114,6 +114,7 @@
                 <version>1.7.3</version>
                 <configuration>
                     <updatePomFile>true</updatePomFile>
+                    <outputDirectory>${project.build.directory}</outputDirectory>
                     <flattenMode>resolveCiFriendliesOnly</flattenMode>
                 </configuration>
                 <executions>

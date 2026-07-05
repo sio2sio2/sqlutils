@@ -55,7 +55,7 @@ public class JpaHandle implements TransactionHandle<EntityManager> {
         try {
             tx.commit();
         } catch (RollbackException e) {
-            throw new DataAccessException("Error al hacer commit. Se realiza rollback.", e);
+            throw new DataAccessException(e.getMessage(), e);
         } catch(IllegalStateException e) {
             throw new DataAccessException("Error al hacer commit. La transacción no está activa.", e);
         }

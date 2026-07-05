@@ -44,7 +44,7 @@ public class Config {
    /**
      * Ruta del guión SQL de entrada. null implica que se usará la entrada estándar.
      */
-    @Option(names = {"-i", "--input"}, description = "Guíón SQL que construye la base de datos.", converter = ArchivoWrapperConverter.class)
+    @Option(names = {"-i", "--input"}, description = "Guión SQL que construye la base de datos. '::JPA::' fuerza a usar JPA.", converter = ArchivoWrapperConverter.class)
     private ArchivoWrapper input;
 
     /** Prefijo para determinar el SGBD. */
@@ -134,6 +134,8 @@ public class Config {
     private static class ArchivoWrapperConverter implements ITypeConverter<ArchivoWrapper> {
         @Override
         public ArchivoWrapper convert(String value) throws Exception {
+            if(value.equals("::JPA::")) return null;
+
             return new ArchivoWrapper(
                 switch(value) {
                     case null -> DEFAULT_INPUT;
@@ -241,7 +243,7 @@ public class Config {
      * Método estático para recuperar la instancia única de configuración.
      * @return La instancia con la configuración.
      */
-    public static Config getInstance() {
+    public static Config get() {
         if(instance == null) throw new IllegalStateException("La configuración no ha sido creada");
         return instance;
     }

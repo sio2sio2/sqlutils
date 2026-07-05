@@ -1,23 +1,32 @@
 package edu.acceso.sqlutils.modelo;
 
 import edu.acceso.sqlutils.orm.minimal.Entity;
+import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
 
 /**
  * Modela un centro de enseñanza.
  */
+@jakarta.persistence.Entity
 public class Centro implements Entity {
 
     /**
      * Código identificativo del centro.
      */
+    @Id
     private Long id;
     /**
      * Nombre del centro.
      */
+    @Column(length = 100, nullable = false)
     private String nombre;
     /**
      * Titularidad: pública o privada.
      */
+    @Column(nullable = false)
+    @Enumerated(EnumType.ORDINAL)
     private Titularidad titularidad;
 
     public Centro() {

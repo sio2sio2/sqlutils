@@ -53,16 +53,12 @@ public class JpaConnection extends BaseConnection<TransactionManager> {
      */
     private JpaConnection(String persistenceUnit, String dbUrl, String user, String password, DataSourceFactory dsFactory, Map<String, Object> props) {
         super(persistenceUnit, dbUrl, user, password, dsFactory);
+
         // Si se definió un Datasource externo, lo añadimos a las propiedades para que se use en la creación del EntityManagerFactory,
         // y se eliminan las propiedades de conexión porque ya no las necesita el proveedor JPA.
-        if(ds != null) {
-            props = new java.util.HashMap<>(props);
-            props.put("jakarta.persistence.nonJtaDataSource", ds);
-            props.remove("jakarta.persistence.jdbc.url");
-            props.remove("jakarta.persistence.jdbc.user");
-            props.remove("jakarta.persistence.jdbc.password");
-        }
+        if(ds != null) props.put("jakarta.persistence.nonJtaDataSource", ds);
         else logger.warn("Se usará el pool interno de conexiones proporcionado por el proveedor JPA. Tenga presente que esto puede dar problemas de rendimiento en entornos de producción.");
+
         this.emf = Persistence.createEntityManagerFactory(persistenceUnit, props);
     }
 
@@ -78,15 +74,43 @@ public class JpaConnection extends BaseConnection<TransactionManager> {
         Objects.requireNonNull(persistenceUnit, "El nombre de la unidad de persistencia no puede ser nulo");
         if(props == null) props = Collections.emptyMap();
 
-        DataSource ds = (DataSource) props.get("jakarta.persistence.nonJtaDataSource");
-        String dbUrl = (String) props.get("jakarta.persistence.jdbc.url");
-        String user = (String) props.get("jakarta.persistence.jdbc.user");
-        String password = (String) props.get("jakarta.persistence.jdbc.password");
+        DataSource ds1 = (DataSource) props.remove("jakarta.persistence.nonJtaDataSource");
+        if(ds1 == null) {
+            ds1 = (DataSource) props.remove("javax.persistence.nonJtaDataSource");
+            if(ds1 != null) {
+                logger.warn("Se está usando la propiedad obsoleta 'javax.persistence.nonJtaDataSource' en lugar de 'jakarta.persistence.nonJtaDataSource'.");
+            }
+        }
+        DataSource ds = ds1;
 
-        boolean missingConf = ds == null && !props.containsKey("jakarta.persistence.jdbc.url");
+        String dbUrl = (String) props.remove("jakarta.persistence.jdbc.url");
+        if(dbUrl == null) {
+            dbUrl = (String) props.remove("javax.persistence.jdbc.url");
+            if(dbUrl != null) {
+                logger.warn("Se está usando la propiedad obsoleta 'javax.persistence.jdbc.url' en lugar de 'jakarta.persistence.jdbc.url'.");
+            }
+        }
+        String user = (String) props.remove("jakarta.persistence.jdbc.user");
+        if(user == null) {
+            user = (String) props.remove("javax.persistence.jdbc.user");
+            if(user != null) {
+                logger.warn("Se está usando la propiedad obsoleta 'javax.persistence.jdbc.user' en lugar de 'jakarta.persistence.jdbc.user'.");
+            }
+        }
+        String password = (String) props.remove("jakarta.persistence.jdbc.password");
+        if(password == null) {
+            password = (String) props.remove("javax.persistence.jdbc.password");
+            if(password != null) {
+                logger.warn("Se está usando la propiedad obsoleta 'javax.persistence.jdbc.password' en lugar de 'jakarta.persistence.jdbc.password'.");
+            }
+        }
 
-        if(missingConf) {
-            throw new IllegalArgumentException("Para crear una instancia de JpaConnection, de proporcionar propiedades de conexión de forma dinámica.");
+        // No hay ningún dato de conexión en las propiedades dinámicas. Por tanto:
+        // o no se facilitaron, o se facilitaron a través del XML de la unidad de persistencia.
+        // Lo segundo no se soporta, porque el XML no se modifica en tiempo de ejecución y no pueden eliminarse
+        // las propiedades de conexión definidas en él para evitar que el proveedor JPA las use. 
+        if(ds == null && dbUrl == null) {
+            throw new IllegalArgumentException("Para crear una instancia de JpaConnection, debe proporcionar las propiedades de conexión (url, user, password) de forma dinámica.");
         }
 
         // Si se pasó directamente un DataSource, es el que se usa; si no, se busca un DataSourceFactory en las propiedades.
@@ -97,7 +121,7 @@ public class JpaConnection extends BaseConnection<TransactionManager> {
                         return ds;
                     }
                 }
-             : (DataSourceFactory) props.get("sqlutils.datasource.factory");
+             : (DataSourceFactory) props.remove("sqlutils.datasource.factory");
 
         JpaConnection instance = new JpaConnection(persistenceUnit, dbUrl, user, password, dsFactory, props);
 

@@ -167,6 +167,10 @@ public abstract class BaseTransactionManager<R> {
             context.begin();
             value = operations.run(context.getContext());
             context.commit();
+        } catch(DataAccessException e) {
+            // Si la excepción es un DataAccessException, se ha llegado al rollback al ejecutar el commit, no las operaciones.
+            // por lo que no hay que hacer rollback, ya que el commit se encarga de ello. Simplemente se propaga la excepción.
+            throw e;
         } catch (Throwable e) {
             context.rollback(e);
         } finally {

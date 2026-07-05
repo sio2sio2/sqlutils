@@ -28,6 +28,13 @@
             "request": "launch",
             "mainClass": "${config:miapp.package}.Test",
             "args": "${command:SpecifyProgramArgs}"
-        }
+        },
+        {
+            "type": "java",
+            "name": "sqlutils (sqlite/JPA)",
+            "request": "launch",
+            "mainClass": "${config:miapp.package}.Test",
+            "args": ["-i", "::JPA::", "-vv", "-B", "sqlite"]
+        },
     ]
 }

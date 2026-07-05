@@ -1,8 +1,10 @@
-package edu.acceso.sqlutils.backend;
+package edu.acceso.sqlutils.persistence.orm;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.Connection;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,8 +12,6 @@ import org.slf4j.LoggerFactory;
 import edu.acceso.sqlutils.ArchivoWrapper;
 import edu.acceso.sqlutils.Config;
 import edu.acceso.sqlutils.DbmsSelector;
-import edu.acceso.sqlutils.backend.mappers.CentroMapper;
-import edu.acceso.sqlutils.backend.mappers.EstudianteMapper;
 import edu.acceso.sqlutils.errors.DataAccessException;
 import edu.acceso.sqlutils.jdbc.SqlUtils;
 import edu.acceso.sqlutils.modelo.Centro;
@@ -24,6 +24,9 @@ import edu.acceso.sqlutils.orm.relations.FetchPlan;
 import edu.acceso.sqlutils.orm.simple.crud.SimpleListCrud;
 import edu.acceso.sqlutils.orm.simple.query.SimpleSqlQuery;
 import edu.acceso.sqlutils.orm.simple.query.SimpleSqlQueryGeneric;
+import edu.acceso.sqlutils.persistence.orm.mappers.CentroMapper;
+import edu.acceso.sqlutils.persistence.orm.mappers.EstudianteMapper;
+import edu.acceso.sqlutils.tx.TransactionContext;
 
 
 /**
@@ -40,18 +43,6 @@ public class Conexion {
 
     /** Fábrica de DAOs para acceder a las entidades del backend */
     private final DaoFactory daoFactory;
-
-    /** Interfaz funcional para ejecutar transacciones con DAOs de Centro y Estudiante */
-    @FunctionalInterface
-    public static interface TransactionInterface {
-        public void run() throws DataAccessException;
-    }
-
-    /** Interfaz funcional para ejecutar transacciones que devuelven resultado con DAOs de Centro y Estudiante */
-    @FunctionalInterface
-    public static interface TransactionInterfaceR<T> {
-        public T run() throws DataAccessException;
-    }
 
     /**
      * Constructor privado para inicializar el backend con un pool de conexiones y una fábrica de DAOs.
@@ -71,7 +62,7 @@ public class Conexion {
     public static Conexion create() throws IOException, DataAccessException {
         if(instance != null) throw new IllegalStateException("La conexión ya se inicializó");
 
-        Config config = Config.getInstance();
+        Config config = Config.get();
 
 
         // No es necesario definir este constructor de fábrica de consultas SQL, porque es el genérico y
@@ -88,7 +79,7 @@ public class Conexion {
         // Para la obtención de relaciones se usa carga perezosa (Lazy Loading).
         // sqlQueryBuilder podría no pasarse.
         DaoFactory daoFactory = DaoFactory.Builder.create(DB_KEY, SimpleListCrud.class, sqlQueryBuilder)
-            .with(FetchPlan.LAZY)
+            .with(FetchPlan.EAGER)
             .registerMapper(CentroMapper.class)
             .registerMapper(EstudianteMapper.class)
             .get(config.getDbUrl(), config.getUser(), config.getPassword());
@@ -103,12 +94,12 @@ public class Conexion {
      * Obtiene la fuente de datos para la conexión a la base de datos.
      * @return Fuente de datos para la conexión a la base de datos.
      */
-    public static Conexion getInstance() {
+    public static Conexion get() {
         if(instance == null) throw new IllegalStateException("La conexión no se ha inicializado");
         return instance;
     }
 
-    private Conexion inicializar(ArchivoWrapper guion) throws IOException, DataAccessException {
+    private Conexion inicializar(ArchivoWrapper guion) throws IOException {
         try(InputStream st = guion.openStream()) {
             daoFactory.getTransactionManager().transaction(ctxt ->{
                 Connection conn = ctxt.handle();
@@ -153,9 +144,8 @@ public class Conexion {
      * @param operations Código con las operaciones que constituyen la transacción.
      * @throws DataAccessException Si hay un error durante la transacción.
      */
-    public <T> T transactionR(TransactionInterfaceR<T> operations) throws DataAccessException {
-        //return daoFactory.getTransactionManager().transaction(conn -> { return operations.run(); });
-        return daoFactory.getTransactionManager().transaction(conn -> { return operations.run(); });
+    public <T> T transactionR(Function<TransactionContext<Connection>, T> operations) {
+        return daoFactory.getTransactionManager().transaction(ctxt -> { return operations.apply(ctxt); });
     }
 
     /**
@@ -163,7 +153,7 @@ public class Conexion {
      * @param operations Código con las operaciones
      * @throws DataAccessException Si hay un error durante la transacción.
      */
-    public void transaction(TransactionInterface operations) throws DataAccessException {
-        daoFactory.getTransactionManager().transaction(conn -> { operations.run(); });
+    public void transaction(Consumer<TransactionContext<Connection>> operations) {
+        daoFactory.getTransactionManager().transaction(ctxt -> { operations.accept(ctxt); });
     }
 }

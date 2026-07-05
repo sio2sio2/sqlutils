@@ -4,28 +4,44 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 
 import edu.acceso.sqlutils.orm.minimal.Entity;
+import jakarta.persistence.Column;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 
 /**
  * Modela un estudiante.
  */
+@jakarta.persistence.Entity
 public class Estudiante implements Entity {
 
     /**
      * Identificador del estudiante.
      */
+    @Id
+    //@GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     /**
      * Nombre completo del estudiante.
      */
+    @Column(nullable =false, length = 100)
+    @NotNull
+    @NotEmpty
     private String nombre;
     /**
      * Fecha de nacimiento del estudiante.
      */
+    @Column(nullable = false)
+    @NotNull
     private LocalDate nacimiento;
 
     /**
      * Centro al que está adscrito.
      */
+    @ManyToOne
+    @JoinColumn(name = "centro_id")
     private Centro centro;
 
     public Estudiante() {

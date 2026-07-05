@@ -1,4 +1,4 @@
-package edu.acceso.sqlutils.backend.mappers;
+package edu.acceso.sqlutils.persistence.orm.mappers;
 
 import edu.acceso.sqlutils.modelo.Centro;
 import edu.acceso.sqlutils.modelo.Titularidad;
