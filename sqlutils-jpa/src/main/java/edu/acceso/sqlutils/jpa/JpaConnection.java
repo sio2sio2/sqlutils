@@ -1,6 +1,6 @@
 package edu.acceso.sqlutils.jpa;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -72,7 +72,7 @@ public class JpaConnection extends BaseConnection<TransactionManager> {
      */
     public static JpaConnection create(String persistenceUnit, Map<String, Object> props) {
         Objects.requireNonNull(persistenceUnit, "El nombre de la unidad de persistencia no puede ser nulo");
-        if(props == null) props = Collections.emptyMap();
+        props = props != null ? new HashMap<>(props) : new HashMap<>();
 
         DataSource ds1 = (DataSource) props.remove("jakarta.persistence.nonJtaDataSource");
         if(ds1 == null) {
